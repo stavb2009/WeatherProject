@@ -130,6 +130,7 @@ class WindowSlider(object):
 
         return self.Data
 
+
     def dataset_prep(self, dataset_location=None, name_of_dates_column=None, columns_to_floats=None):
         if not dataset_location:
             print("No DataSet location have inserted")
@@ -168,28 +169,3 @@ class WindowSlider(object):
         return df
 
 
-w = 2
-train_constructor = WindowSlider(window_size=w)
-
-dataset_location = 'data\\dead_see_weather_dates_edited.csv'
-df = pd.read_csv(dataset_location)
-
-columns_to_num = ['Wsp_WS4_Avg', 'Wdr_WS4_Avg', 'Wdr_WS4_Std', 'Wsp_WS4_Max',
-                  'Lv_PA36_Avg', 'Lv_PA36_Max', 'Lv_PA36_Min', 'Lv_PA36_Std']
-
-df3 = train_constructor.dataset_prep(dataset_location, name_of_dates_column='TIMESTAMP',
-                                     columns_to_floats=columns_to_num)
-
-deltaT = np.array([((df3.index[i + 1] - df3.index[i]).value) / 1e10 for i in range(len(df3) - 1)])
-deltaT = np.concatenate((np.array([0]), deltaT))
-
-df3.insert(2, '∆T', deltaT)
-
-data_set = df3["2018-12-12":"2018-12-25"]
-data_set.drop(columns=['TIMESTAMP', 'minute_of_day', 'day', 'month', 'year'], axis=1, inplace=True)
-
-data_tmp = data_set[['Wdr_WS4_Avg', 'Wdr_WS4_Std']]
-train_windows = train_constructor.collect_windows(data_set, save_mode=True, window_size=w, step=w)
-train_plus_train_windows = train_constructor.Add_predictions(data_tmp, prediction_length=2)
-print("aaa")
-# df3.loc['2021-08-01':'2021-08-31'] To get certain rows
