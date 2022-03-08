@@ -25,7 +25,7 @@ df3 = train_constructor.dataset_prep(dataset_location, name_of_dates_column='TIM
 deltaT = np.array([((df3.index[i + 1] - df3.index[i]).value) / 1e10 for i in range(len(df3) - 1)])
 deltaT = np.concatenate((np.array([0]), deltaT))
 
-df3.insert(2, '∆T', deltaT)
+# df3.insert(2, '∆T', deltaT)
 
 data_set = df3["2018-12-12":"2018-12-25"]
 data_set.drop(columns=['TIMESTAMP', 'minute_of_day', 'day', 'month', 'year'], axis=1, inplace=True)
@@ -35,17 +35,14 @@ train_windows = train_constructor.collect_windows(data_set, save_mode=True, wind
 train_plus_train_windows = train_constructor.Add_predictions(data_tmp, prediction_length=2)
 
 selected_columns = ['Wsp_WS4_Avg(1)',
-       'Wsp_WS4_Avg(2)', '∆T(1)', '∆T(2)', 'Wdr_WS4_Avg(1)', 'Wdr_WS4_Avg(2)',
-       'Wdr_WS4_Std(1)', 'Wdr_WS4_Std(2)', 'Wsp_WS4_Max(1)', 'Wsp_WS4_Max(2)',
-       'Lv_PA36_Avg(1)', 'Lv_PA36_Avg(2)', 'Lv_PA36_Max(1)', 'Lv_PA36_Max(2)',
-       'Lv_PA36_Min(1)', 'Lv_PA36_Min(2)', 'Lv_PA36_Std(1)', 'Lv_PA36_Std(2)']
-
+                    'Wsp_WS4_Avg(2)', '∆T(1)', '∆T(2)', 'Wdr_WS4_Avg(1)', 'Wdr_WS4_Avg(2)',
+                    'Wdr_WS4_Std(1)', 'Wdr_WS4_Std(2)', 'Wsp_WS4_Max(1)', 'Wsp_WS4_Max(2)',
+                    'Lv_PA36_Avg(1)', 'Lv_PA36_Avg(2)', 'Lv_PA36_Max(1)', 'Lv_PA36_Max(2)',
+                    'Lv_PA36_Min(1)', 'Lv_PA36_Min(2)', 'Lv_PA36_Std(1)', 'Lv_PA36_Std(2)']
 
 train = torch.from_numpy((train_plus_train_windows[selected_columns][10:20]).values).float()
 test = torch.from_numpy((train_plus_train_windows[selected_columns][20:30]).values).float()
 valid = torch.from_numpy((train_plus_train_windows[selected_columns][30:40]).values).float()
-
-
 
 
 # Starting from sequential data, batchify arranges the dataset into columns.
@@ -128,9 +125,11 @@ ntokens = test.shape[1]
 if args.model == 'Transformer':
     model = model.TransformerModel(ntokens, args.emsize, args.nhead, args.nhid, args.nlayers, args.dropout).to(device)
 else:
-    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(
+        device)
 
 criterion = nn.NLLLoss()
+
 
 ###############################################################################
 # Training code
@@ -157,8 +156,8 @@ def repackage_hidden(h):
 
 def get_batch(source, i):
     seq_len = min(args.bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].view(-1)
+    data = source[i:i + seq_len]
+    target = source[i + 1:i + 1 + seq_len].view(-1)
     return data, target
 
 
@@ -215,9 +214,9 @@ def train():
             cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                    'loss {:5.2f} | ppl {:8.2f}'.format(
+                  'loss {:5.2f} | ppl {:8.2f}'.format(
                 epoch, batch, len(train_data) // args.bptt, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+                              elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
         if args.dry_run:
@@ -238,14 +237,14 @@ best_val_loss = None
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
-    for epoch in range(1, args.epochs+1):
+    for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
         train()
         val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-                'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                           val_loss, math.exp(val_loss)))
+              'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
+                                         val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
         if not best_val_loss or val_loss < best_val_loss:
@@ -278,6 +277,5 @@ print('=' * 89)
 if len(args.onnx_export) > 0:
     # Export the model in ONNX format.
     export_onnx(args.onnx_export, batch_size=1, seq_len=args.bptt)
-
 
 print("Stan")
