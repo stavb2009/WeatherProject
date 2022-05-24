@@ -8,10 +8,11 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
 import os
 import dataLoader
-import model as model_l
+from data import model as model_l
 import pandas as pd
 import openpyxl
 import numpy as np
+
 
 # w = 2
 # train_constructor = dataLoader.WindowSlider(window_size=w)
@@ -56,84 +57,28 @@ import numpy as np
 
 # Below here is the passover data test
 ###################################################
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-src = os.path.join('data_for_tests.xlsx')
-df = pd.read_excel(src)
-
-print("check 1")
-def convert_panda_to_tensors(panda: pd.DataFrame) -> Tensor:
-    """
-    Args:
-    This function take data with prediction and positional encoding and convert it
-    to tensor, when it's first dimention (dim=0) would be the sample umber
-    :return:
-    """
-
-    number_of_samples = int(df.shape[0]/3)
-    number_of_measurements_in_dample = df.shape[1] - 1
-    x_and_y = 2
-
-    tensor_data = torch.empty((number_of_samples, x_and_y, number_of_measurements_in_dample))
-    df_without_time = df.loc[df[df.columns[0]] != 'time']
-
-    idx_df = 0
-    idx_tens = 0
-    while idx_df < len(df_without_time):
-        tensor_data[idx_tens] = torch.from_numpy((df_without_time[df.columns[1::]][idx_df:idx_df+2]).values.astype(np.float64))
-        idx_df += 2
-        idx_tens += 1
-
-    return tensor_data
+folder = 'data_for_24_4'
+file_train = 'data.xlsx'
+file_val = 'val.xlsx'
+src_train = os.path.join(folder, file_train)
+src_val = os.path.join(folder, file_val)
+df_train = pd.read_excel(src_train)
+df_val = pd.read_excel(src_val)
 
 
 
-# df[df.columns[1:6]][1:3] # should be useful
-def get_batch(source: Tensor, i: int) -> Tuple[Tensor, Tensor]:
-    """
-    Args:
-        source: Tensor, shape [full_seq_len, batch_size]
-        i: int
+train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train)
+val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val)
 
-    Returns:
-        tuple (data, target), where data has shape [seq_len, batch_size] and
-        target has shape [seq_len * batch_size]
-    """
+#TODO: I need to continue the code from here:
 
-    #TODO:  In real run we have to change the line under to fit a length of half day
-    seq_len = min(bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].reshape(-1)
-    return data, target
-
-
-# tmp_dt = {
-#         "X": [3, 5, -2, 2],
-#         "Y": [7, -1, -1, -9]
-#     }
-# tmp_forcast = {
-#         "X": [1, 2, 3],
-#         "Y": [-1, -2, -3]
-#     }
-#
-#
-# dt = pd.DataFrame(tmp_dt)
-# forcast_dt = pd.DataFrame(tmp_forcast)
-
-# dt = pd.DataFrame(tmp_dt)
-# forcast_dt = pd.DataFrame(tmp_forcast)
-# print(dt)
-#
-# dt = dt.transpose()
-# forcast_dt = forcast_dt.transpose()
-# print("forcast dt: \n",forcast_dt)
-# print("\n dt: \n",dt)
-train_tensor_row = convert_panda_to_tensors(df)
+num_of_batches = 2
+train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row, samps_in_batch=num_of_batches)
 # Let's play with it a bit
-train_tensor_row = train_tensor_row.transpose(1,2)
-train_tensor_row = train_tensor_row.reshape((train_tensor_row.shape[0], 1, int(train_tensor_row.shape[1]*train_tensor_row.shape[2])))
-ntokens = train_tensor_row.shape[2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
-d_model = train_tensor_row.shape[2]   # embedding dimension # but in our case it can be an arbitrary
+ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
+d_model = train_tuple[0][0].shape[2]  # embedding dimension # but in our case it can be an arbitrary
 d_hid = 200  # dimension of the feedforward network model in nn.TransformerEncoder
 nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
 nhead = 2 #int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
@@ -178,17 +123,15 @@ def train(model: nn.Module) -> None:
     total_loss = 0.
     log_interval = 200
     start_time = time.time()
-    src_mask = model_l.generate_square_subsequent_mask(train_data.shape[1]).to(device)
+    src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
 
-    num_batches = len(train_data) // bptt
-    for batch, i in enumerate(train_data):
+    num_batches = len(train_tuple)
+    for batch, i in enumerate(train_tuple):
 
         # If we want to use real batches, we need to look at the original code again!
-        if batch == len(train_data):
-            break
-        data, targets = train_data[batch], train_data[batch+1]
+        data, targets = i[0], i[1]
         output = model(data, src_mask)
-        loss = criterion(output.view(-1, ntokens), targets)
+        loss = criterion(output[:,:,:targets.shape[2]], targets)
 
         optimizer.zero_grad()
         loss.backward()
@@ -211,41 +154,41 @@ def train(model: nn.Module) -> None:
 def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
     total_loss = 0.
-    src_mask = model_l.generate_square_subsequent_mask(bptt).to(device)
+    src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
     with torch.no_grad():
-        for i in range(0, eval_data.size(0) - 1, bptt):
-            data, targets = get_batch(eval_data, i)
-            batch_size = data.size(0)
-            if batch_size != bptt:
-                src_mask = src_mask[:batch_size, :batch_size]
+        for i in eval_data:
+            data, targets = i[0], i[1]
+            batch_size = num_of_batches
             output = model(data, src_mask)
-            output_flat = output.view(-1, ntokens)
-            total_loss += batch_size * criterion(output_flat, targets).item()
+
+            total_loss += batch_size * criterion(output[:,:,:targets.shape[2]], targets).item()
     return total_loss / (len(eval_data) - 1)
 
 
 
 
 
-best_val_loss = float('inf')
-epochs = 1
-best_model = None
 
-for epoch in range(1, epochs + 1):
-    epoch_start_time = time.time()
-    train(model)
-    val_loss = evaluate(model, train_tensor_row)
-    val_ppl = math.exp(val_loss)
-    elapsed = time.time() - epoch_start_time
-    print('-' * 89)
-    print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-          f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
-    print('-' * 89)
+if __name__ == '__main__':
+    best_val_loss = float('inf')
+    epochs = 1
+    best_model = None
 
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        best_model = copy.deepcopy(model)
+    for epoch in range(1, epochs + 1):
+        epoch_start_time = time.time()
+        train(model)
+        val_loss = evaluate(model, train_tuple)
+        val_ppl = math.exp(val_loss)
+        elapsed = time.time() - epoch_start_time
+        print('-' * 89)
+        print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+              f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
+        print('-' * 89)
 
-    scheduler.step()
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model = copy.deepcopy(model)
 
-torch.save(best_model.state_dict(), os.path.join(os.getcwd(),'model_trained.pt'))
+        scheduler.step()
+
+    torch.save(best_model.state_dict(), os.path.join(os.getcwd(), 'data/model_trained.pt'))

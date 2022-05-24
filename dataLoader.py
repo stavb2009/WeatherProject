@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import re
+import torch
+from torch import nn, Tensor
 import time
 import xlsxwriter
 
@@ -9,6 +11,51 @@ import xlsxwriter
 I took all of that from this site:
 https://towardsdatascience.com/ml-approaches-for-time-series-4d44722e48fe
 """
+class Data(object):
+    def convert_panda_to_tensors(panda: pd.DataFrame) -> Tensor:
+        """
+        Args:
+        This function take data with prediction and positional encoding and convert it
+        to tensor, when it's first dimention (dim=0) would be the sample umber
+        :return:
+        """
+
+        number_of_samples = int(panda.shape[0] / 3)
+        number_of_measurements_in_sample = panda.shape[1] - 1
+        x_and_y = 2
+
+        tensor_data = torch.empty((number_of_samples, x_and_y, number_of_measurements_in_sample))
+        df_without_time = panda.loc[panda[panda.columns[0]] != ('TIMESTAMP' or 'time')]
+
+        idx_df = 0
+        idx_tens = 0
+        while idx_df < number_of_samples:
+            tensor_data[idx_tens] = torch.from_numpy(
+                (df_without_time[panda.columns[1::]][idx_df:idx_df + 2]).values.astype(np.float64))
+            idx_df += 2
+            idx_tens += 1
+
+        tensor_data = tensor_data.transpose(1, 2)
+        tensor_data = tensor_data.reshape(
+            (tensor_data.shape[0], 1, int(tensor_data.shape[1] * tensor_data.shape[2])))
+        return tensor_data
+
+    def batchify(train: Tensor, result: Tensor, samps_in_batch: int = 1) -> Tensor:
+        """Divides the data into bsz separate sequences, removing extra elements
+        that wouldn't cleanly fit.
+
+        Args:
+            train: Tensor , train data
+            result: Tensor, the expected result
+
+        Returns:
+            returns a list which every position is (train, result)
+        """
+        data_train = torch.split(train, samps_in_batch, dim=0)
+        data_res = torch.split(result, samps_in_batch, dim=0)
+        baches = [(data_train[i], data_res[i]) for i in range(len(data_res))]
+
+        return baches
 
 
 class WindowSlider(object):
