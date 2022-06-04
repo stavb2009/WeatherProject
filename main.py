@@ -51,7 +51,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Below here is the passover data test
 ###################################################
-writer = SummaryWriter()
+writer = SummaryWriter(comment="comment")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
 file_train = 'data.csv'
@@ -139,7 +139,9 @@ def train(model: nn.Module) -> None:
             lr = scheduler.get_last_lr()[0]
             ms_per_batch = (time.time() - start_time) * 1000 / log_interval
             cur_loss = total_loss / log_interval
-            ppl = 1 #math.exp(cur_loss)
+            # ppl = 1 #math.exp(cur_loss)
+            # TODO: we dont need the ppl, it's only here for stav's clear countious
+            ppl = 1
             print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
                   f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
                   f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
@@ -149,6 +151,7 @@ def train(model: nn.Module) -> None:
 
 def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
+
     total_loss = 0.
     src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
     with torch.no_grad():
@@ -161,18 +164,20 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
 
 
 if __name__ == '__main__':
-    best_val_loss = float('inf')
+    best_val_loss = -float('inf')  ### added '-' here to make sense. neet to varify
     epochs = 2
     best_model = None
     model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(device)
+    epoch_size = 30
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
+        # random_
         train(model)
         val_loss = evaluate(model, train_tuple)
         writer.add_scalar('val_loss', val_loss, 1)
         writer.flush()
-        val_ppl = 1 #math.exp(val_loss)
+        val_ppl = 1  # math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
         print('-' * 89)
         print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
