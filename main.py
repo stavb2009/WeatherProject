@@ -7,6 +7,10 @@ from data import model as model_l
 import pandas as pd
 import xlsxwriter
 from torch.utils.tensorboard import SummaryWriter
+import pickle
+import openpyxl
+import numpy as np
+
 
 # w = 2
 # train_constructor = dataLoader.WindowSlider(window_size=w)
@@ -58,26 +62,27 @@ file_train = 'data.csv'
 file_val = 'val.csv'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
-df_train = pd.read_csv(src_train)
-df_val = pd.read_csv(src_val)
+df_train = pd.read_excel(src_train)
+df_val = pd.read_excel(src_val)
+
+
 
 train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train)
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val)
 
-# TODO: I need to continue the code from here:
+#TODO: I need to continue the code from here:
 
 num_of_batches = 2
 train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row, samps_in_batch=num_of_batches)
 # Let's play with it a bit
-ntokens = train_tuple[0][0].shape[
-    2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
+ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
 d_model = train_tuple[0][0].shape[2]  # embedding dimension # but in our case it can be an arbitrary
 d_hid = 200  # dimension of the feedforward network model in nn.TransformerEncoder
 nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
-nhead = 2  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+nhead = 2 #int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
 dropout = 0.2  # dropout probability
 model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(device)
-bptt = 1  # bptt = How many samples in the batch
+bptt = 1 # bptt = How many samples in the batch
 #
 #
 # ####################################
@@ -86,6 +91,7 @@ bptt = 1  # bptt = How many samples in the batch
 #
 # ####################################
 #
+
 
 
 # src_mask = model_l.generate_square_subsequent_mask(train.shape[1]).to(device)
@@ -102,6 +108,7 @@ bptt = 1  # bptt = How many samples in the batch
 import copy
 import time
 
+
 criterion = nn.MSELoss()
 lr = 5.0  # learning rate
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
@@ -109,21 +116,21 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 train_data = train_tensor_row
 
 
-def train(model: nn.Module) -> None:
+def train(model: nn.Module, random_numbers) -> None:
     model.train()  # turn on train mode
     total_loss = 0.
-    log_interval = 200
+    log_interval = 20
     start_time = time.time()
     src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
+    src_mask.to(device)
+    num_batches = len(random_numbers)
 
-    num_batches = len(train_tuple)
-    for batch, i in enumerate(train_tuple):
+    for batch, i in enumerate(random_numbers):
 
         # If we want to use real batches, we need to look at the original code again!
-        data, targets = i[0], i[1]
+        data, targets = train_tuple[i][0], train_tuple[i][1]
         data = data.to(device)
         targets = targets.to(device)
-        src_mask.to(device)
         output = model(data, src_mask).to(device)
         loss = criterion(output[:, :, :targets.shape[2]], targets)
         writer.add_scalar('training loss', loss, 1)
@@ -148,10 +155,33 @@ def train(model: nn.Module) -> None:
             total_loss = 0
             start_time = time.time()
 
+    # for batch, i in enumerate(train_tuple):
+    #
+    #     # If we want to use real batches, we need to look at the original code again!
+    #     data, targets = train_tuple[random_numbers[batch]][0], train_tuple[random_numbers[batch]][0][1]
+    #     output = model(data, src_mask)
+    #     loss = criterion(output[:,:,:targets.shape[2]], targets)
+    #
+    #     optimizer.zero_grad()
+    #     loss.backward()
+    #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+    #     optimizer.step()
+    #
+    #     total_loss += loss.item()
+    #     if batch % log_interval == 0 and batch > 0:
+    #         lr = scheduler.get_last_lr()[0]
+    #         ms_per_batch = (time.time() - start_time) * 1000 / log_interval
+    #         cur_loss = total_loss / log_interval
+    #         ppl = math.exp(cur_loss)
+    #         print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+    #               f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+    #               f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+    #         total_loss = 0
+    #         start_time = time.time()
+
 
 def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
-
     total_loss = 0.
     src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
     with torch.no_grad():
@@ -159,21 +189,27 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             data, targets = i[0].to(device), i[1].to(device)
             batch_size = num_of_batches
             output = model(data, src_mask)
-            total_loss += batch_size * criterion(output[:, :, :targets.shape[2]], targets).item()
+
+            total_loss += batch_size * criterion(output[:,:,:targets.shape[2]], targets).item()
     return total_loss / (len(eval_data) - 1)
 
 
+
+
+
+
 if __name__ == '__main__':
-    best_val_loss = -float('inf')  ### added '-' here to make sense. neet to varify
-    epochs = 2
+    best_val_loss = float('inf')
+    epochs = 5
     best_model = None
-    model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(device)
     epoch_size = 30
+    with open('myData.pickle', 'wb') as f:
+        pickle.dump(train_tuple, f)
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
-        # random_
-        train(model)
+        random_indexes = torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
+        train(model, random_indexes)
         val_loss = evaluate(model, train_tuple)
         writer.add_scalar('val_loss', val_loss, 1)
         writer.flush()
@@ -181,7 +217,7 @@ if __name__ == '__main__':
         elapsed = time.time() - epoch_start_time
         print('-' * 89)
         print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-              f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
+              f'valid loss {val_loss:5.2f}')
         print('-' * 89)
 
         if val_loss < best_val_loss:
