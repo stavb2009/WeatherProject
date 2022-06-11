@@ -11,7 +11,7 @@ import pickle
 import openpyxl
 import numpy as np
 
-
+# note for check
 # w = 2
 # train_constructor = dataLoader.WindowSlider(window_size=w)
 #
