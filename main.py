@@ -11,7 +11,6 @@ import pickle
 import openpyxl
 import numpy as np
 
-# note for check
 # w = 2
 # train_constructor = dataLoader.WindowSlider(window_size=w)
 #
@@ -53,13 +52,13 @@ import numpy as np
 
 ######################################################################
 
-# Below here is the passover data test
+# load the data and define the device
 ###################################################
-writer = SummaryWriter(comment="comment")
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
-file_train = 'data.csv'
-file_val = 'val.csv'
+file_train = 'data.xlsx'
+file_val = 'val.xlsx'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
 df_train = pd.read_excel(src_train)
@@ -70,19 +69,20 @@ df_val = pd.read_excel(src_val)
 train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train)
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val)
 
-#TODO: I need to continue the code from here:
-
-num_of_batches = 2
+# here are all the parameters of the network:
+######################################################################
+num_of_batches = 2 # num of samples in a batch
 train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row, samps_in_batch=num_of_batches)
 # Let's play with it a bit
 ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
 d_model = train_tuple[0][0].shape[2]  # embedding dimension # but in our case it can be an arbitrary
 d_hid = 200  # dimension of the feedforward network model in nn.TransformerEncoder
 nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
-nhead = 2 #int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+#TODO: we need to see how many heads we need
+nhead = 4 #int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
 dropout = 0.2  # dropout probability
 model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(device)
-bptt = 1 # bptt = How many samples in the batch
+
 #
 #
 # ####################################
@@ -110,8 +110,9 @@ import time
 
 
 criterion = nn.MSELoss()
-lr = 5.0  # learning rate
+lr = 2e-1  # learning rate
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+#TODO:we want to talk about it with Ayal
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 train_data = train_tensor_row
 
@@ -142,16 +143,15 @@ def train(model: nn.Module, random_numbers) -> None:
 
         total_loss += loss.item()
         writer.add_scalar('total loss', total_loss, 1)
-        if batch % log_interval == 0 and batch > 0:
+        if (batch + 1) % log_interval == 0 and batch > 0:
             lr = scheduler.get_last_lr()[0]
             ms_per_batch = (time.time() - start_time) * 1000 / log_interval
             cur_loss = total_loss / log_interval
             # ppl = 1 #math.exp(cur_loss)
             # TODO: we dont need the ppl, it's only here for stav's clear countious
-            ppl = 1
-            print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+            print(f'| epoch {epoch + 1:3d} | {batch:5d}/{num_batches:5d} batches | '
                   f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-                  f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+                  f' averaged loss {cur_loss:5.2f}')
             total_loss = 0
             start_time = time.time()
 
@@ -199,12 +199,11 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
 
 
 if __name__ == '__main__':
+    writer = SummaryWriter(comment="comment")
     best_val_loss = float('inf')
     epochs = 5
     best_model = None
-    epoch_size = 30
-    with open('myData.pickle', 'wb') as f:
-        pickle.dump(train_tuple, f)
+    epoch_size = 40
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
