@@ -78,6 +78,8 @@ class Modifier:
         self.shape = self.df.shape
         self.forcast = forcast
         self.total_len = total_len
+        self.val = pd.DataFrame()
+        self.max = 0
 
     def point2xy(self, ws, wd, dim='col'):
         """
@@ -180,6 +182,34 @@ class Modifier:
             x = (data.iloc[1]).to_numpy()
             result = np.argwhere(x == x)
             self.df = data.reindex(columns=result, copy=False)
+
+    def normlize(self, data, val):
+        indices_temp = np.arange(0, data.shape[0])
+        scale_fun = lambda x: x % 3 != 0
+        indices = indices_temp[scale_fun(indices_temp)]
+        data0 = data.pop(0)
+        val0 = val.pop(0)
+        A = (data.iloc[indices]).max()
+        B = (val.iloc[indices]).max()
+        max_val = np.maximum(A.max(), B.max())
+        for index in indices:
+            data.iloc[index] = data.iloc[index] / max_val
+            val.iloc[index] = val.iloc[index] / max_val
+        val.insert(loc=0, column='0', value=val0)
+        data.insert(loc=0, column='0', value=data0)
+        self.max = max
+
+    def denormlize(self, data, val):
+        indices_temp = np.arange(0, data.shape[0])
+        scale_fun = lambda x: x % 3 != 0
+        indices = indices_temp[scale_fun(indices_temp)]
+        data0 = data.pop(0)
+        val0 = val.pop(0)
+        for index in indices:
+            data.iloc[index] = data.iloc[index] * self.max
+            val.iloc[index] = val.iloc[index] * self.max
+        val.insert(loc=0, column='0', value=val0)
+        data.insert(loc=0, column='0', value=data0)
 
 
 def main():
