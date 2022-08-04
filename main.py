@@ -13,8 +13,8 @@ import time
 
 torch.set_printoptions(linewidth=120)
 import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as transforms
+# import torchvision
+# import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 import pickle
 import openpyxl
@@ -66,13 +66,12 @@ import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
-file_train = 'data.xlsx'
-file_val = 'val.xlsx'
+file_train = 'data_normlized.csv'
+file_val = 'val_normlized.csv'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
-df_train = pd.read_excel(src_train)
-df_val = pd.read_excel(src_val)
-
+df_train = pd.read_csv(src_train)
+df_val = pd.read_csv(src_val)
 train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train)
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val)
 
@@ -86,7 +85,7 @@ def train(model: nn.Module, random_numbers) -> None:
     total_loss = 0.
     log_interval = 20
     start_time = time.time()
-    src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
+    src_mask = model_l.generate_square_subsequent_mask(num_batch).to(device)
     src_mask.to(device)
     num_batches = len(random_numbers)
 
@@ -97,13 +96,14 @@ def train(model: nn.Module, random_numbers) -> None:
         data = data.to(device)
         targets = targets.to(device)
         output = model(data, src_mask).to(device)
-        loss = criterion(output[:, :, :targets.shape[2]], targets)
+        # we want to use only the wind and direction and not the day:
+        loss = criterion(output[:2, :, :targets.shape[2]], targets[:2, :, :])  
         writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         optimizer.zero_grad()
         loss.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # make sure it ('=') doesn't hurt
-        # print('grad_norm = ',grad_norm)
+        writer.add_scalar('grad_norm', grad_norm, batch)  # used to be global_step=1
         optimizer.step()
 
         total_loss += loss.item()
@@ -115,8 +115,8 @@ def train(model: nn.Module, random_numbers) -> None:
             writer.add_scalar('curr loss', cur_loss, batch)
             # ppl = 1 #math.exp(cur_loss)
             # TODO: we dont need the ppl, it's only here for Stav's clear conscious
-            print(f'| epoch {epoch + 1:3d} | {batch:5d}/{num_batches:5d} batches | '
-                  f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+            print(f'| epoch {epoch:3d} | {batch + 1:5d}/{num_batches:5d} batches | '
+                  f'lr {lr:02.6f} | ms/batch {ms_per_batch:5.2f} | '
                   f' averaged loss {cur_loss:5.2f}')
             total_loss = 0
             start_time = time.time()
@@ -149,104 +149,98 @@ def train(model: nn.Module, random_numbers) -> None:
 def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
     total_loss = 0.
-    src_mask = model_l.generate_square_subsequent_mask(num_of_batches).to(device)
+    src_mask = model_l.generate_square_subsequent_mask(num_batch).to(device)
     with torch.no_grad():
         for i in eval_data:
             data, targets = i[0].to(device), i[1].to(device)
-            batch_size = num_of_batches
+            batch_size = num_batch
             output = model(data, src_mask)
 
             total_loss += batch_size * criterion(output[:, :, :targets.shape[2]], targets).item()
-    return total_loss / (len(eval_data) - 1)
+    return total_loss / (len(eval_data))
 
 
 if __name__ == '__main__':
-    epochs = []
-    lrs = []
-    whatevers = []
-    you = []
-    for epoch in epochs:
-        for lr in lrs:
-            for whatever in whatevers:
-                for me in you:
-                    writer_comment = "epoch = " + str(epoch) + ' lr = ' + str(lr) + " whatever = " + str(
-                        whatever) + ' me = ' \
-                                     + str(me)
-                    writer = SummaryWriter(comment=writer_comment)
-                    ###
-                    ###   rest of code here
-                    ###
-                    ###
-                    writer.flush()
-                    writer.close()
-
-    ### whatever was in the begining after the imports
-    num_of_batches = 2  # num of samples in a batch
-    train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row, samps_in_batch=num_of_batches)
-    # Let's play with it a bit
-    ntokens = train_tuple[0][0].shape[
-        2]  # len(selected_columns)  # size of data that we put inside # the number of columns in the input
-    d_model = train_tuple[0][0].shape[2]  # embedding dimension # but in our case it can be an arbitrary
-    d_hid = 200  # dimension of the feedforward network model in nn.TransformerEncoder
-    nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
+    epochs_list = range(10, 11, 5)
+    nheads = [2, 8]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    nhead = 4  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    lrs = np.geomspace(1e-5, 50, num=8)  # learning rates
+    epoch_sizes = range(40, 41, 10)
+    num_of_batches = range(3, 4)
+    d_hids = range(200, 206, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
+    nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     dropout = 0.2  # dropout probability
-    model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(device)
-
-    #
-    #
-    # ####################################
-    #
-    # #     until here everything is ok
-    #
-    # ####################################
-    #
-
-    # src_mask = model_l.generate_square_subsequent_mask(train.shape[1]).to(device)
-    # # data, targets = get_batch(train, 3)
-    # src_mask = src_mask[:train.shape[1], :train.shape[1]]
-    # criterion = nn.MSELoss()
-    #
-    # output = model(train[2], src_mask)
-    # loss = criterion(output.reshape(1,12), train[4])
-
-    # lets try to train a bit
-
-    criterion = nn.MSELoss()
-    lr = 2e-1  # learning rate
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
-    # TODO:we want to talk about it with Ayal
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
-    train_data = train_tensor_row
-
-    ###### start of previous main
-
     best_val_loss = float('inf')
-    epochs = 5
     best_model = None
-    epoch_size = 40
 
-    for epoch in range(1, epochs + 1):
-        epoch_start_time = time.time()
-        random_indexes = torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
-        train(model, random_indexes)
-        writer.add_graph(model)
-        val_loss = evaluate(model, train_tuple)
-        writer.add_scalar('val_loss', val_loss, epoch)
+    for epochs in epochs_list:
+        for lr in lrs:
+            for epoch_size in epoch_sizes:
+                for num_batch in num_of_batches:
+                    for nhead in nheads:
+                        for d_hid in d_hids:
+                            # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
+                            # = " + str( epoch_size) + ' num_batch = ' + str(num_batch) + ' nhead= ' + str(nhead) + '
+                            # d_hids= ' \ + str(d_hid)
+                            writer_comment = f'epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
+                                             f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
+                            print(writer_comment)
+                            writer = SummaryWriter(comment=writer_comment)
+                            ###
+                            ###
+                            train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
+                                                                   samps_in_batch=num_batch)  # changed
+                            # Let's play with it a bit
+                            ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
+                            # size of data that we put inside # the number of
+                                                                              # columns in the input
+                            d_model = train_tuple[0][0].shape[2]  # embedding dimension
+                                                                # but in our case it can be an arbitrary
+                            model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
+                                device)
+                            criterion = nn.MSELoss()
+                            optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+                            # TODO:we want to talk about it with Ayal
+                            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+                            train_data = train_tensor_row
 
-        val_ppl = 1  # math.exp(val_loss)
-        elapsed = time.time() - epoch_start_time
-        writer.flush()
-        print('-' * 89)
-        print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-              f'valid loss {val_loss:5.2f}')
-        print('-' * 89)
+                            for epoch in range(1, epochs + 1):
+                                epoch_start_time = time.time()
+                                random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
+                                train(model, random_indexes)
+                                #writer.add_graph(model)
+                                val_loss = evaluate(model, train_tuple)
+                                writer.add_scalar('val_loss', val_loss, epoch)
+                                writer.add_histogram("weights decoder data", model.decoder.weight.data)
+                                writer.add_histogram("weights decoder T", model.decoder.weight.T)
+                                writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
+                                writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
+                                writer.add_histogram("bias  decoder", model.decoder.bias.data)
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model = copy.deepcopy(model)
+                                writer.add_histogram("weights encoder data", model.encoder.weight.data)
+                                writer.add_histogram("weights encoder T", model.encoder.weight.T)
+                                writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
+                                writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
+                                writer.add_histogram("bias encoder", model.encoder.bias.data)
 
-        scheduler.step()
 
-    torch.save(best_model.state_dict(), os.path.join(os.getcwd(), 'data/model_trained.pt'))
+
+                                # val_ppl = 1  # math.exp(val_loss)
+                                elapsed = time.time() - epoch_start_time
+                                #writer.flush()  # should it be here?
+                                print('-' * 89)
+                                print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+                                      f'valid loss {val_loss:5.2f}')
+                                print('-' * 89)
+
+                                if val_loss < best_val_loss:
+                                    best_val_loss = val_loss
+                                    best_model = copy.deepcopy(model)
+                                    torch.save(best_model.state_dict(),
+                                               os.path.join(os.getcwd(), 'data/model_trained.pt'))
+                                scheduler.step()
+
+                            writer.flush()
+                            writer.close()
+
+
