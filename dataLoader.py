@@ -12,7 +12,7 @@ I took all of that from this site:
 https://towardsdatascience.com/ml-approaches-for-time-series-4d44722e48fe
 """
 class Data(object):
-    def convert_panda_to_tensors(panda: pd.DataFrame) -> Tensor:
+    def convert_panda_to_tensors(panda: pd.DataFrame, numOfParameters=2) -> Tensor:
         """
         Args:
         This function take data with prediction and positional encoding and convert it
@@ -20,12 +20,12 @@ class Data(object):
         :return:
         """
 
-        number_of_samples = int(panda.shape[0] / 3)
+        number_of_samples = int(panda.shape[0] / (numOfParameters+1))
         number_of_measurements_in_sample = panda.shape[1] - 1
         # x_and_y = 2
-        x_and_y_and_day = 3
 
-        tensor_data = torch.zeros((number_of_samples, x_and_y_and_day, number_of_measurements_in_sample))
+
+        tensor_data = torch.zeros((number_of_samples, (numOfParameters + 1), number_of_measurements_in_sample))
         tensor_day_in_year = torch.zeros(number_of_samples)
         df_time = panda.loc[panda[panda.columns[0]] == ('TIMESTAMP' or 'time')]
         df_without_time = panda.loc[panda[panda.columns[0]] != ('TIMESTAMP' or 'time')]
@@ -36,13 +36,13 @@ class Data(object):
             tensor_day_in_year[idx_tens] = np.cos(2*np.pi*(pd.to_datetime(df_time.iloc[idx_tens,1]).dayofyear/365))
             if np.cos(2*np.pi*(pd.to_datetime(df_time.iloc[idx_tens,1]).dayofyear/365)) > 1:
                 print("stop")
-            tensor_data[idx_tens][:2] = torch.from_numpy(
-                (df_without_time[panda.columns[1::]][idx_df:idx_df + 2]).values.astype(np.float64))
-            idx_df += 2
+            tensor_data[idx_tens][:numOfParameters] = torch.from_numpy(
+                (df_without_time[panda.columns[1::]][idx_df:idx_df + numOfParameters]).values.astype(np.float64))
+            idx_df += numOfParameters
             idx_tens += 1
 
         tensor_day_in_year = tensor_day_in_year.repeat(tensor_data.shape[2], 1).transpose(0, 1)
-        tensor_data[:, 2, :] = tensor_day_in_year
+        tensor_data[:, numOfParameters, :] = tensor_day_in_year
         tensor_data = tensor_data.transpose(1, 2)
         tensor_data = tensor_data.reshape(
             (tensor_data.shape[0], 1, int(tensor_data.shape[1] * tensor_data.shape[2])))

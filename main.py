@@ -66,14 +66,14 @@ import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
-file_train = 'data_normlized.csv'
-file_val = 'val_normlized.csv'
+file_train = 'data_040822.csv'
+file_val = 'val_040822.csv'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
 df_train = pd.read_csv(src_train)
 df_val = pd.read_csv(src_val)
-train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train)
-val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val)
+train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train, numOfParameters=3)
+val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameters=3)
 
 
 # here are all the parameters of the network:
