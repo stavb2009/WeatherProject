@@ -66,8 +66,8 @@ import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
-file_train = 'data_040822.csv'
-file_val = 'val_040822.csv'
+file_train = 'data_tanh5.csv'
+file_val = 'val_tanh5.csv'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
 df_train = pd.read_csv(src_train)
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     epochs_list = range(10, 11, 5)
     nheads = [2, 8]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(1e-5, 50, num=8)  # learning rates
+    lrs = np.geomspace(1e-3, 0.1, num=6)  # learning rates
     epoch_sizes = range(40, 41, 10)
     num_of_batches = range(3, 4)
     d_hids = range(200, 206, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
@@ -182,7 +182,7 @@ if __name__ == '__main__':
                             # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
                             # = " + str( epoch_size) + ' num_batch = ' + str(num_batch) + ' nhead= ' + str(nhead) + '
                             # d_hids= ' \ + str(d_hid)
-                            writer_comment = f'epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
+                            writer_comment = f'  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
                                              f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
                             print(writer_comment)
                             writer = SummaryWriter(comment=writer_comment)
@@ -198,7 +198,7 @@ if __name__ == '__main__':
                                                                 # but in our case it can be an arbitrary
                             model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
                                 device)
-                            criterion = nn.MSELoss()
+                            criterion = nn.L1Loss()
                             optimizer = torch.optim.SGD(model.parameters(), lr=lr)
                             # TODO:we want to talk about it with Ayal
                             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)

@@ -1,10 +1,12 @@
 import math
 from typing import Tuple
+from math import sqrt
+import numpy as np
 
 import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.nn import TransformerEncoder, TransformerEncoderLayer, TransformerDecoderLayer, TransformerDecoder
 from torch.utils.data import dataset
 
 
@@ -54,7 +56,11 @@ class TransformerModel(nn.Module):
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+
         self.encoder = nn.Linear(ntoken, d_model)
+        # decoder_layers = TransformerDecoderLayer(d_model, nhead, d_hid, dropout)
+        # self.transformer_decoder = TransformerDecoder(decoder_layers, nlayers)
+
         self.d_model = d_model
         self.decoder = nn.Linear(d_model, ntoken)
 
@@ -62,9 +68,20 @@ class TransformerModel(nn.Module):
 
     def init_weights(self) -> None:
         initrange = 0.1
-        self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.encoder.weight.data.uniform_(-initrange, initrange)  #OG
+        self.decoder.weight.data.uniform_(-initrange, initrange)  #OG
+        # self.decoder.weight.data.uniform_(-10*initrange, 10*initrange)  #try4
+        # self.encoder.weight.data.uniform_(-3*initrange, 3*initrange)  #try4
+        # self.decoder.weight.data.uniform_(0, 1)  #try2
+        # self.encoder.weight.data.uniform_(0, 1)  #try2
+        # sqrt_dim=np.sqrt(self.d_model)
+        # self.decoder.weight.data.uniform_(-sqrt_dim, sqrt_dim)  #try5
+        # self.encoder.weight.data.uniform_(sqrt_dim, sqrt_dim)  #try5
+
+        # torch.nn.init.xavier_uniform(self.decoder.weight)  #try3
+        # torch.nn.init.xavier_uniform(self.encoder.weight)  #try3
         self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-initrange, initrange)
+
 
     def forward(self, src: Tensor, src_mask: Tensor) -> Tensor:
         """
@@ -79,6 +96,7 @@ class TransformerModel(nn.Module):
         #src = self.pos_encoder(src)
         output = self.transformer_encoder(src, src_mask)
         output = self.decoder(output)
+        # output = self.transformer_decoder(output)
         return output
 
 
