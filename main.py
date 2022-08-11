@@ -200,7 +200,7 @@ if __name__ == '__main__':
                                 device)
                             criterion = nn.L1Loss()
                             optimizer = torch.optim.SGD(model.parameters(), lr=lr)
-                            # TODO:we want to talk about it with Ayal
+
                             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
                             train_data = train_tensor_row
 
