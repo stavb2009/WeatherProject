@@ -95,25 +95,25 @@ def train(model: nn.Module, random_numbers) -> None:
         data = data.to(device)
         targets = targets.to(device)
         output = model(data, src_mask).to(device)
-        tgt_mask = dataLoader.Data.generate_square_subsequent_mask(
-            dim1=num_predicted_features,
-            dim2=num_predicted_features
-        )
-
-        src_mask = dataLoader.Data.generate_square_subsequent_mask(
-            dim1=output_sequence_length,
-            dim2=enc_seq_len
-        )
-        output_2 = model_2(
-            src=data[:, :, :dim_val],
-            tgt=data[:, :, dim_val - 1:],
-            src_mask=src_mask,
-            tgt_mask=tgt_mask
-        )
-
+        # tgt_mask = dataLoader.Data.generate_square_subsequent_mask(
+        #     dim1=num_predicted_features,
+        #     dim2=num_predicted_features
+        # )
+        #
+        # src_mask = dataLoader.Data.generate_square_subsequent_mask(
+        #     dim1=output_sequence_length,
+        #     dim2=enc_seq_len
+        # )
+        # output_2 = model_2(
+        #     src=data[:, :, :dim_val],
+        #     tgt=data[:, :, dim_val - 1:],
+        #     src_mask=src_mask,
+        #     tgt_mask=tgt_mask
+        # )
+        #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:2, :, :targets.shape[2]], targets[:2, :, :])  
+        loss = criterion(output[:, :, :306], targets[:, :, 306])
         writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         optimizer.zero_grad()

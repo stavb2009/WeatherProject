@@ -45,7 +45,7 @@ class Data(object):
 
         tensor_day_in_year = tensor_day_in_year.repeat(tensor_data.shape[2], 1).transpose(0, 1)
         tensor_data[:, numOfParameters, :] = tensor_day_in_year
-        tensor_data = tensor_data.transpose(1, 2)
+        # tensor_data = tensor_data.transpose(1, 2)
         tensor_data = tensor_data.reshape(
             (tensor_data.shape[0], 1, int(tensor_data.shape[1] * tensor_data.shape[2])))
         return tensor_data
