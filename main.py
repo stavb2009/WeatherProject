@@ -4,6 +4,7 @@ from torch import nn, Tensor
 import os
 import dataLoader
 from data import model as model_l
+from data import model_2 as tst
 import pandas as pd
 import xlsxwriter
 import torch.optim as opt
@@ -76,8 +77,6 @@ train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train, numOfParam
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameters=3)
 
 
-# here are all the parameters of the network:
-######################################################################
 
 
 def train(model: nn.Module, random_numbers) -> None:
@@ -96,6 +95,23 @@ def train(model: nn.Module, random_numbers) -> None:
         data = data.to(device)
         targets = targets.to(device)
         output = model(data, src_mask).to(device)
+        tgt_mask = dataLoader.Data.generate_square_subsequent_mask(
+            dim1=num_predicted_features,
+            dim2=num_predicted_features
+        )
+
+        src_mask = dataLoader.Data.generate_square_subsequent_mask(
+            dim1=output_sequence_length,
+            dim2=enc_seq_len
+        )
+        output_2 = model_2(
+            src=data[:, :, :dim_val],
+            tgt=data[:, :, dim_val - 1:],
+            src_mask=src_mask,
+            tgt_mask=tgt_mask
+        )
+
+
         # we want to use only the wind and direction and not the day:
         loss = criterion(output[:2, :, :targets.shape[2]], targets[:2, :, :])  
         writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
@@ -173,6 +189,35 @@ if __name__ == '__main__':
     best_val_loss = float('inf')
     best_model = None
 
+    ## Model parameters
+
+    dim_val = 512  # This can be any value divisible by n_heads. 512 is used in the original transformer paper.
+    n_heads = 8  # The number of attention heads (aka parallel attention layers). dim_val must be divisible by this number
+    n_decoder_layers = 4  # Number of times the decoder layer is stacked in the decoder
+    n_encoder_layers = 4  # Number of times the encoder layer is stacked in the encoder
+    input_size = 512  # The number of input variables. 1 if univariate forecasting.
+    dec_seq_len = 92  # length of input given to decoder. Can have any integer value.
+    enc_seq_len = train_tensor_row.shape[2]  # length of input given to encoder. Can have any integer value.
+    output_sequence_length = val_tensor_row.shape[2]  # Length of the target sequence, i.e. how many time steps should your forecast cover
+    max_seq_len = enc_seq_len  # What's the longest sequence the model will encounter? Used to make the positional encoder
+    num_predicted_features = enc_seq_len - dim_val + 1
+    # num_predicted_features = 3
+
+    model_2 = tst.TimeSeriesTransformer(
+        input_size=input_size,
+        dec_seq_len=dec_seq_len,
+        batch_first=True,
+        dim_val=dim_val,
+        out_seq_len=output_sequence_length,
+        n_decoder_layers=n_decoder_layers,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        num_predicted_features=num_predicted_features)
+
+    # Make src mask for decoder with size:
+
+
+
     for epochs in epochs_list:
         for lr in lrs:
             for epoch_size in epoch_sizes:
@@ -189,7 +234,7 @@ if __name__ == '__main__':
                             ###
                             ###
                             train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
-                                                                   samps_in_batch=num_batch)  # changed
+                                                                   samps_in_batch=num_batch, shuffle=True)  # changed
                             # Let's play with it a bit
                             ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
                             # size of data that we put inside # the number of
@@ -208,7 +253,7 @@ if __name__ == '__main__':
                                 epoch_start_time = time.time()
                                 random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                 train(model, random_indexes)
-                                #writer.add_graph(model)
+                                writer.add_graph(model)
                                 val_loss = evaluate(model, train_tuple)
                                 writer.add_scalar('val_loss', val_loss, epoch)
                                 writer.add_histogram("weights decoder data", model.decoder.weight.data)
