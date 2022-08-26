@@ -94,6 +94,8 @@ def train(model: nn.Module, random_numbers) -> None:
         data, targets = train_tuple[i][0], train_tuple[i][1]
         data = data.to(device)
         targets = targets.to(device)
+        optimizer.zero_grad()
+
         output = model(data, src_mask).to(device)
         # tgt_mask = dataLoader.Data.generate_square_subsequent_mask(
         #     dim1=num_predicted_features,
@@ -116,10 +118,10 @@ def train(model: nn.Module, random_numbers) -> None:
         loss = criterion(output[:, :, :306], targets[:, :, 306])
         writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
-        optimizer.zero_grad()
         loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # make sure it ('=') doesn't hurt
-        writer.add_scalar('grad_norm', grad_norm, batch)  # used to be global_step=1
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        #grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # make sure it ('=') doesn't hurt
+        #writer.add_scalar('grad_norm', grad_norm, batch)  # used to be global_step=1
         optimizer.step()
 
         total_loss += loss.item()
@@ -166,6 +168,8 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
     total_loss = 0.
     src_mask = model_l.generate_square_subsequent_mask(num_batch).to(device)
+    ############## try
+    #src_mask=torch.zeros(src_mask.shape).to(device)
     with torch.no_grad():
         for i in eval_data:
             data, targets = i[0].to(device), i[1].to(device)
@@ -178,12 +182,12 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
 
 if __name__ == '__main__':
     epochs_list = range(10, 11, 5)
-    nheads = [2, 8]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    nheads = [2, 8, 16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(1e-3, 0.1, num=6)  # learning rates
+    lrs = np.geomspace(1e-3, 1, num=8)  # learning rates
     epoch_sizes = range(40, 41, 10)
     num_of_batches = range(3, 4)
-    d_hids = range(200, 206, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
+    d_hids = range(200, 400, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
     nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     dropout = 0.2  # dropout probability
     best_val_loss = float('inf')
@@ -227,7 +231,11 @@ if __name__ == '__main__':
                             # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
                             # = " + str( epoch_size) + ' num_batch = ' + str(num_batch) + ' nhead= ' + str(nhead) + '
                             # d_hids= ' \ + str(d_hid)
-                            writer_comment = f'  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
+                            #
+                            #
+                            #
+                            #
+                            writer_comment = f' tuning  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
                                              f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
                             print(writer_comment)
                             writer = SummaryWriter(comment=writer_comment)
@@ -244,7 +252,7 @@ if __name__ == '__main__':
                             model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
                                 device)
                             criterion = nn.L1Loss()
-                            optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+                            optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
                             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
                             train_data = train_tensor_row
@@ -253,7 +261,7 @@ if __name__ == '__main__':
                                 epoch_start_time = time.time()
                                 random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                 train(model, random_indexes)
-                                writer.add_graph(model)
+                                #writer.add_graph(model)
                                 val_loss = evaluate(model, train_tuple)
                                 writer.add_scalar('val_loss', val_loss, epoch)
                                 writer.add_histogram("weights decoder data", model.decoder.weight.data)
@@ -267,6 +275,18 @@ if __name__ == '__main__':
                                 writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
                                 writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
                                 writer.add_histogram("bias encoder", model.encoder.bias.data)
+                                writer.add_histogram("layer 1 linear 1 weight", model.transformer_encoder.layers[0].linear1.weight)
+                                writer.add_scalar("layer 1 linear 1 weight grad", torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
+                                writer.add_histogram("layer 1 linear 2 weight", model.transformer_encoder.layers[0].linear2.weight)
+                                writer.add_scalar("layer 1 linear 2 weight grad", torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
+                                writer.add_histogram("layer 2 linear 1 weight", model.transformer_encoder.layers[1].linear1.weight)
+                                writer.add_scalar("layer 2 linear 1 weight grad", torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
+                                writer.add_histogram("layer 2 linear 2 weight", model.transformer_encoder.layers[1].linear2.weight)
+                                writer.add_scalar("layer 2 linear 2 weight grad", torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
+
+
+
+
 
 
 
@@ -284,7 +304,10 @@ if __name__ == '__main__':
                                     torch.save(best_model.state_dict(),
                                                os.path.join(os.getcwd(), 'data/model_trained.pt'))
                                 scheduler.step()
+                            ### delete later
+                            writer.add_histogram("layer 2 linear 1 weight end",model.transformer_encoder.layers[1].linear1.weight)
 
+                            pass
                             writer.flush()
                             writer.close()
 
