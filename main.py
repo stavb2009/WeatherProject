@@ -86,6 +86,7 @@ df_val_test = pd.read_csv(src_val_test)
 test_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_test, numOfParameters=3)
 val_test_row = dataLoader.Data.convert_panda_to_tensors(df_val_test, numOfParameters=3)
 
+samples_in_half_day = 144//2
 
 
 def train(model: nn.Module, random_numbers) -> None:
@@ -124,8 +125,8 @@ def train(model: nn.Module, random_numbers) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:, :, :306], targets[:, :, :306])
-        writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
+        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :])
+        # writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -185,7 +186,7 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :306], targets[:, :, :306]).item()
+            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :]).item()
     return total_loss / (len(eval_data))
 
 
