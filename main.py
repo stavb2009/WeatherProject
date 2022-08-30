@@ -76,6 +76,15 @@ df_val = pd.read_csv(src_val)
 train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train, numOfParameters=3)
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameters=3)
 
+## test data
+file_train = 'data_aug.csv'
+file_val = 'forcast_aug.csv'
+src_test = os.path.join(folder, file_train)
+src_val_test = os.path.join(folder, file_val)
+df_test = pd.read_csv(src_test)
+df_val_test = pd.read_csv(src_val_test)
+test_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_test, numOfParameters=3)
+val_test_row = dataLoader.Data.convert_panda_to_tensors(df_val_test, numOfParameters=3)
 
 
 
@@ -115,7 +124,7 @@ def train(model: nn.Module, random_numbers) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:, :, :306], targets[:, :, 306])
+        loss = criterion(output[:, :, :306], targets[:, :, :306])
         writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         loss.backward()
@@ -176,18 +185,18 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :targets.shape[2]], targets).item()
+            total_loss += batch_size * criterion(output[:, :, :306], targets[:, :, :306]).item()
     return total_loss / (len(eval_data))
 
 
 if __name__ == '__main__':
     epochs_list = range(10, 11, 5)
-    nheads = [2, 8, 16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    nheads = [8]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(1e-3, 1, num=8)  # learning rates
+    lrs = np.geomspace(1e-3, 1e-1, num=8)  # learning rates
     epoch_sizes = range(40, 41, 10)
     num_of_batches = range(3, 4)
-    d_hids = range(200, 400, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
+    d_hids = range(200, 201, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
     nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     dropout = 0.2  # dropout probability
     best_val_loss = float('inf')
@@ -243,6 +252,8 @@ if __name__ == '__main__':
                             ###
                             train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
                                                                    samps_in_batch=num_batch, shuffle=True)  # changed
+                            test_tuple = dataLoader.Data.batchify(test_tensor_row, val_test_row,
+                                                                   samps_in_batch=1, shuffle=False)
                             # Let's play with it a bit
                             ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
                             # size of data that we put inside # the number of
@@ -304,8 +315,7 @@ if __name__ == '__main__':
                                     torch.save(best_model.state_dict(),
                                                os.path.join(os.getcwd(), 'data/model_trained.pt'))
                                 scheduler.step()
-                            ### delete later
-                            writer.add_histogram("layer 2 linear 1 weight end",model.transformer_encoder.layers[1].linear1.weight)
+
 
                             pass
                             writer.flush()
