@@ -125,7 +125,7 @@ def train(model: nn.Module, random_numbers) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :])
+        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
         # writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         loss.backward()
@@ -177,7 +177,7 @@ def train(model: nn.Module, random_numbers) -> None:
 def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     model.eval()  # turn on evaluation mode
     total_loss = 0.
-    src_mask = model_l.generate_square_subsequent_mask(num_batch).to(device)
+    src_mask = model_l.generate_square_subsequent_mask(eval_data[1][0].shape[0]).to(device)
     ############## try
     #src_mask=torch.zeros(src_mask.shape).to(device)
     with torch.no_grad():
@@ -186,18 +186,18 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :]).item()
+            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)]).item()
     return total_loss / (len(eval_data))
 
 
 if __name__ == '__main__':
-    epochs_list = range(10, 11, 5)
-    nheads = [8]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    epochs_list = range(20, 61, 10)
+    nheads = [8,16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(1e-3, 1e-1, num=8)  # learning rates
+    lrs = np.geomspace(1e-3, 1e-2, num=2)  # learning rates
     epoch_sizes = range(40, 41, 10)
     num_of_batches = range(3, 4)
-    d_hids = range(200, 201, 40)  # dimension of the feedforward network model in nn.TransformerEncoder
+    d_hids = range(200, 350, 80)  # dimension of the feedforward network model in nn.TransformerEncoder
     nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     dropout = 0.2  # dropout probability
     best_val_loss = float('inf')
@@ -274,7 +274,7 @@ if __name__ == '__main__':
                                 random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                 train(model, random_indexes)
                                 #writer.add_graph(model)
-                                val_loss = evaluate(model, train_tuple)
+                                val_loss = evaluate(model, test_tuple)
                                 writer.add_scalar('val_loss', val_loss, epoch)
                                 writer.add_histogram("weights decoder data", model.decoder.weight.data)
                                 writer.add_histogram("weights decoder T", model.decoder.weight.T)
