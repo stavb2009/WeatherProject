@@ -268,7 +268,7 @@ if __name__ == '__main__':
                             writer_comment = f' tuning  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
                                              f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
                             print(writer_comment)
-                            # writer = SummaryWriter(comment=writer_comment)
+                            writer = SummaryWriter(comment=writer_comment)
                             ###
                             ###
                             train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
