@@ -89,7 +89,11 @@ val_test_row = dataLoader.Data.convert_panda_to_tensors(df_val_test, numOfParame
 samples_in_half_day = 144//2
 
 
-def train(model: nn.Module, random_numbers) -> None:
+def train(model: nn.Module, random_numbers, save = False) -> None:
+
+    if save:
+        df2save = pd.DataFrame()
+
     model.train()  # turn on train mode
     total_loss = 0.
     log_interval = 20
@@ -125,7 +129,23 @@ def train(model: nn.Module, random_numbers) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :])
+        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
+
+        if save:
+            category_length = output.shape[2]//4  # 4 is the current number of categories
+            for idx in range(output.shape[0]):  # to loop over all the samples in the batch
+                tmp_dict = {'wx': output[idx, 0, (category_length*0):(category_length*1)].detach().numpy(),
+                            'wy':output[idx, 0, (category_length*1):(category_length*2)].detach().numpy(),
+                            'T_DL_Avg':output[idx, 0, (category_length*2):(category_length*3)].detach().numpy(),
+                            'TIMESTAMP':output[idx, 0, (category_length*3):(category_length*4)].detach().numpy()}
+                tmp_df = pd.DataFrame.from_dict(tmp_dict,orient='index')
+                df2save = df2save.append(tmp_df, ignore_index=False)
+
+            if batch==(num_batches-1):  # last round of train
+                df2save.to_csv(os.path.join(folder, 'output_results.csv'))
+
+            print("hey")
+
         # writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         loss.backward()
@@ -186,7 +206,7 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :]).item()
+            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)]).item()
     return total_loss / (len(eval_data))
 
 
@@ -248,7 +268,7 @@ if __name__ == '__main__':
                             writer_comment = f' tuning  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
                                              f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
                             print(writer_comment)
-                            writer = SummaryWriter(comment=writer_comment)
+                            # writer = SummaryWriter(comment=writer_comment)
                             ###
                             ###
                             train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
@@ -273,7 +293,7 @@ if __name__ == '__main__':
                                 epoch_start_time = time.time()
                                 random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                 train(model, random_indexes)
-                                #writer.add_graph(model)
+                                writer.add_graph(model)
                                 val_loss = evaluate(model, train_tuple)
                                 writer.add_scalar('val_loss', val_loss, epoch)
                                 writer.add_histogram("weights decoder data", model.decoder.weight.data)
