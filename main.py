@@ -89,7 +89,11 @@ val_test_row = dataLoader.Data.convert_panda_to_tensors(df_val_test, numOfParame
 samples_in_half_day = 144//2
 
 
-def train(model: nn.Module, random_numbers) -> None:
+def train(model: nn.Module, random_numbers, save=False) -> None:
+
+    if save:
+        df2save = pd.DataFrame()
+
     model.train()  # turn on train mode
     total_loss = 0.
     log_interval = 20
@@ -126,6 +130,22 @@ def train(model: nn.Module, random_numbers) -> None:
 
         # we want to use only the wind and direction and not the day:
         loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
+
+        if save:
+            category_length = output.shape[2]//4  # 4 is the current number of categories
+            for idx in range(output.shape[0]):  # to loop over all the samples in the batch
+                tmp_dict = {'wx': output[idx, 0, (category_length*0):(category_length*1)].detach().numpy(),
+                            'wy':output[idx, 0, (category_length*1):(category_length*2)].detach().numpy(),
+                            'T_DL_Avg':output[idx, 0, (category_length*2):(category_length*3)].detach().numpy(),
+                            'TIMESTAMP':output[idx, 0, (category_length*3):(category_length*4)].detach().numpy()}
+                tmp_df = pd.DataFrame.from_dict(tmp_dict,orient='index')
+                df2save = df2save.append(tmp_df, ignore_index=False)
+
+            if batch==(num_batches-1):  # last round of train
+                df2save.to_csv(os.path.join(folder, 'output_results.csv'))
+
+            print("hey")
+
         # writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
         loss.backward()
