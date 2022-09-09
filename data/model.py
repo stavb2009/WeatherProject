@@ -34,7 +34,7 @@ class PositionalEncoding(nn.Module):
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
-        #pe[:, 1::2] = torch.cos(position * div_term)
+        # pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer('pe', pe)
 
@@ -68,20 +68,19 @@ class TransformerModel(nn.Module):
 
     def init_weights(self) -> None:
         initrange = 0.1
-        #self.encoder.weight.data.uniform_(-initrange, initrange)  #OG
-        #self.decoder.weight.data.uniform_(-initrange, initrange)  #OG
-        #self.decoder.weight.data.uniform_(-10*initrange, 10*initrange)  #try4
-        #self.encoder.weight.data.uniform_(-10*initrange, 10*initrange)  #try4
+        # self.encoder.weight.data.uniform_(-initrange, initrange)  #OG
+        # self.decoder.weight.data.uniform_(-initrange, initrange)  #OG
+        # self.decoder.weight.data.uniform_(-10*initrange, 10*initrange)  #try4
+        # self.encoder.weight.data.uniform_(-10*initrange, 10*initrange)  #try4
         # self.decoder.weight.data.uniform_(0, 1)  #try2
         # self.encoder.weight.data.uniform_(0, 1)  #try2
-        #sqrt_dim=np.sqrt(self.d_model)
-        #self.decoder.weight.data.uniform_(-sqrt_dim, sqrt_dim)  #try5
-        #self.encoder.weight.data.uniform_(sqrt_dim, sqrt_dim)  #try5
+        # sqrt_dim=np.sqrt(self.d_model)
+        # self.decoder.weight.data.uniform_(-sqrt_dim, sqrt_dim)  #try5
+        # self.encoder.weight.data.uniform_(sqrt_dim, sqrt_dim)  #try5
 
-        torch.nn.init.xavier_uniform(self.decoder.weight.data)  #try3
-        torch.nn.init.xavier_uniform(self.encoder.weight.data)  #try3
+        torch.nn.init.xavier_uniform(self.decoder.weight.data)  # try3
+        torch.nn.init.xavier_uniform(self.encoder.weight.data)  # try3
         self.decoder.bias.data.zero_()
-
 
     def forward(self, src: Tensor, src_mask: Tensor) -> Tensor:
         """
@@ -97,12 +96,22 @@ class TransformerModel(nn.Module):
 
         output = self.transformer_encoder(src, src_mask)
         output = self.decoder(output)
-        #output = self.decoder(src) #simple layer
+        # output = self.decoder(src) #simple layer
 
-        #output = self.transformer_decoder(output,src_mask)
+        # output = self.transformer_decoder(output,src_mask)
         return output
 
 
 def generate_square_subsequent_mask(sz: int) -> Tensor:
     """Generates an upper-triangular matrix of -inf, with zeros on diag."""
     return torch.triu(torch.ones(sz, sz) * float('-inf'), diagonal=1)
+
+
+def special_loss(estimation, target, T, torch_loss_func, punishment_factor=10):
+    assert estimation.shape == target.shape, "special_loos: estimation and targets not in the same shape"
+    threshold = punishment_factor * T * torch.ones(target.shape)
+    new_estimation = torch.where(estimation >= T, estimation, threshold)
+    new_target = torch.where(target >= T, target, threshold)
+
+    loss = torch_loss_func(new_estimation, new_target)
+    return loss

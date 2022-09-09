@@ -86,11 +86,10 @@ df_val_test = pd.read_csv(src_val_test)
 test_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_test, numOfParameters=3)
 val_test_row = dataLoader.Data.convert_panda_to_tensors(df_val_test, numOfParameters=3)
 
-samples_in_half_day = 144//2
+samples_in_half_day = 144 // 2
 
 
 def train(model: nn.Module, random_numbers, save=False) -> None:
-
     if save:
         df2save = pd.DataFrame()
 
@@ -129,19 +128,21 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
+        loss = model_l.special_loss(output[:, :, :(samples_in_half_day * 2)], targets[:, :, :(samples_in_half_day * 2)],
+                                    T, criterion)
+        # loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
 
         if save:
-            category_length = output.shape[2]//4  # 4 is the current number of categories
+            category_length = output.shape[2] // 4  # 4 is the current number of categories
             for idx in range(output.shape[0]):  # to loop over all the samples in the batch
-                tmp_dict = {'wx': output[idx, 0, (category_length*0):(category_length*1)].detach().numpy(),
-                            'wy':output[idx, 0, (category_length*1):(category_length*2)].detach().numpy(),
-                            'T_DL_Avg':output[idx, 0, (category_length*2):(category_length*3)].detach().numpy(),
-                            'TIMESTAMP':output[idx, 0, (category_length*3):(category_length*4)].detach().numpy()}
-                tmp_df = pd.DataFrame.from_dict(tmp_dict,orient='index')
+                tmp_dict = {'wx': output[idx, 0, (category_length * 0):(category_length * 1)].detach().numpy(),
+                            'wy': output[idx, 0, (category_length * 1):(category_length * 2)].detach().numpy(),
+                            'T_DL_Avg': output[idx, 0, (category_length * 2):(category_length * 3)].detach().numpy(),
+                            'TIMESTAMP': output[idx, 0, (category_length * 3):(category_length * 4)].detach().numpy()}
+                tmp_df = pd.DataFrame.from_dict(tmp_dict, orient='index')
                 df2save = df2save.append(tmp_df, ignore_index=False)
 
-            if batch==(num_batches-1):  # last round of train
+            if batch == (num_batches - 1):  # last round of train
                 df2save.to_csv(os.path.join(folder, 'output_results.csv'))
 
             print("hey")
@@ -150,8 +151,8 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-        #grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # make sure it ('=') doesn't hurt
-        #writer.add_scalar('grad_norm', grad_norm, batch)  # used to be global_step=1
+        # grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # make sure it ('=') doesn't hurt
+        # writer.add_scalar('grad_norm', grad_norm, batch)  # used to be global_step=1
         optimizer.step()
 
         total_loss += loss.item()
@@ -199,20 +200,22 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
     total_loss = 0.
     src_mask = model_l.generate_square_subsequent_mask(eval_data[1][0].shape[0]).to(device)
     ############## try
-    #src_mask=torch.zeros(src_mask.shape).to(device)
+    # src_mask=torch.zeros(src_mask.shape).to(device)
     with torch.no_grad():
         for i in eval_data:
             data, targets = i[0].to(device), i[1].to(device)
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)]).item()
+            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day * 2)],
+                                                 targets[:, :, :(samples_in_half_day * 2)]).item()
     return total_loss / (len(eval_data))
 
 
 if __name__ == '__main__':
     epochs_list = range(20, 61, 10)
-    nheads = [8,16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    nheads = [8,
+              16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
     lrs = np.geomspace(1e-3, 1e-2, num=2)  # learning rates
     epoch_sizes = range(40, 41, 10)
@@ -224,7 +227,7 @@ if __name__ == '__main__':
     best_model = None
 
     ## Model parameters
-
+    T = 0.2
     dim_val = 512  # This can be any value divisible by n_heads. 512 is used in the original transformer paper.
     n_heads = 8  # The number of attention heads (aka parallel attention layers). dim_val must be divisible by this number
     n_decoder_layers = 4  # Number of times the decoder layer is stacked in the decoder
@@ -232,25 +235,24 @@ if __name__ == '__main__':
     input_size = 512  # The number of input variables. 1 if univariate forecasting.
     dec_seq_len = 92  # length of input given to decoder. Can have any integer value.
     enc_seq_len = train_tensor_row.shape[2]  # length of input given to encoder. Can have any integer value.
-    output_sequence_length = val_tensor_row.shape[2]  # Length of the target sequence, i.e. how many time steps should your forecast cover
+    output_sequence_length = val_tensor_row.shape[
+        2]  # Length of the target sequence, i.e. how many time steps should your forecast cover
     max_seq_len = enc_seq_len  # What's the longest sequence the model will encounter? Used to make the positional encoder
     num_predicted_features = enc_seq_len - dim_val + 1
     # num_predicted_features = 3
-
-    model_2 = tst.TimeSeriesTransformer(
-        input_size=input_size,
-        dec_seq_len=dec_seq_len,
-        batch_first=True,
-        dim_val=dim_val,
-        out_seq_len=output_sequence_length,
-        n_decoder_layers=n_decoder_layers,
-        n_encoder_layers=n_encoder_layers,
-        n_heads=n_heads,
-        num_predicted_features=num_predicted_features)
+    #
+    # model_2 = tst.TimeSeriesTransformer(
+    #     input_size=input_size,
+    #     dec_seq_len=dec_seq_len,
+    #     batch_first=True,
+    #     dim_val=dim_val,
+    #     out_seq_len=output_sequence_length,
+    #     n_decoder_layers=n_decoder_layers,
+    #     n_encoder_layers=n_encoder_layers,
+    #     n_heads=n_heads,
+    #     num_predicted_features=num_predicted_features)
 
     # Make src mask for decoder with size:
-
-
 
     for epochs in epochs_list:
         for lr in lrs:
@@ -274,13 +276,13 @@ if __name__ == '__main__':
                             train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
                                                                    samps_in_batch=num_batch, shuffle=True)  # changed
                             test_tuple = dataLoader.Data.batchify(test_tensor_row, val_test_row,
-                                                                   samps_in_batch=1, shuffle=False)
+                                                                  samps_in_batch=1, shuffle=False)
                             # Let's play with it a bit
                             ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
                             # size of data that we put inside # the number of
-                                                                              # columns in the input
+                            # columns in the input
                             d_model = train_tuple[0][0].shape[2]  # embedding dimension
-                                                                # but in our case it can be an arbitrary
+                            # but in our case it can be an arbitrary
                             model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
                                 device)
                             criterion = nn.L1Loss()
@@ -291,9 +293,10 @@ if __name__ == '__main__':
 
                             for epoch in range(1, epochs + 1):
                                 epoch_start_time = time.time()
-                                random_indexes = torch.arange(len(train_tuple))#torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
+                                random_indexes = torch.arange(
+                                    len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                 train(model, random_indexes)
-                                #writer.add_graph(model)
+                                # writer.add_graph(model)
                                 val_loss = evaluate(model, test_tuple)
                                 writer.add_scalar('val_loss', val_loss, epoch)
                                 writer.add_histogram("weights decoder data", model.decoder.weight.data)
@@ -307,24 +310,26 @@ if __name__ == '__main__':
                                 writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
                                 writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
                                 writer.add_histogram("bias encoder", model.encoder.bias.data)
-                                writer.add_histogram("layer 1 linear 1 weight", model.transformer_encoder.layers[0].linear1.weight)
-                                writer.add_scalar("layer 1 linear 1 weight grad", torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
-                                writer.add_histogram("layer 1 linear 2 weight", model.transformer_encoder.layers[0].linear2.weight)
-                                writer.add_scalar("layer 1 linear 2 weight grad", torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
-                                writer.add_histogram("layer 2 linear 1 weight", model.transformer_encoder.layers[1].linear1.weight)
-                                writer.add_scalar("layer 2 linear 1 weight grad", torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
-                                writer.add_histogram("layer 2 linear 2 weight", model.transformer_encoder.layers[1].linear2.weight)
-                                writer.add_scalar("layer 2 linear 2 weight grad", torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
-
-
-
-
-
-
+                                writer.add_histogram("layer 1 linear 1 weight",
+                                                     model.transformer_encoder.layers[0].linear1.weight)
+                                writer.add_scalar("layer 1 linear 1 weight grad",
+                                                  torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
+                                writer.add_histogram("layer 1 linear 2 weight",
+                                                     model.transformer_encoder.layers[0].linear2.weight)
+                                writer.add_scalar("layer 1 linear 2 weight grad",
+                                                  torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
+                                writer.add_histogram("layer 2 linear 1 weight",
+                                                     model.transformer_encoder.layers[1].linear1.weight)
+                                writer.add_scalar("layer 2 linear 1 weight grad",
+                                                  torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
+                                writer.add_histogram("layer 2 linear 2 weight",
+                                                     model.transformer_encoder.layers[1].linear2.weight)
+                                writer.add_scalar("layer 2 linear 2 weight grad",
+                                                  torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
 
                                 # val_ppl = 1  # math.exp(val_loss)
                                 elapsed = time.time() - epoch_start_time
-                                #writer.flush()  # should it be here?
+                                # writer.flush()  # should it be here?
                                 print('-' * 89)
                                 print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
                                       f'valid loss {val_loss:5.2f}')
@@ -337,9 +342,6 @@ if __name__ == '__main__':
                                                os.path.join(os.getcwd(), 'data/model_trained.pt'))
                                 scheduler.step()
 
-
                             pass
                             writer.flush()
                             writer.close()
-
-
