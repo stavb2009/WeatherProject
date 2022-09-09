@@ -78,7 +78,7 @@ val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameter
 
 ## test data
 file_train = 'data_tanh5_sept.csv'
-file_val = 'val_tanh5_sept.csv'
+file_val = 'forcast_tanh5_sept.csv'
 src_test = os.path.join(folder, file_train)
 src_val_test = os.path.join(folder, file_val)
 df_test = pd.read_csv(src_test)
