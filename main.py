@@ -207,8 +207,9 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             batch_size = num_batch
             output = model(data, src_mask)
 
-            total_loss += batch_size * criterion(output[:, :, :(samples_in_half_day * 2)],
-                                                 targets[:, :, :(samples_in_half_day * 2)]).item()
+            total_loss += batch_size * model_l.special_loss(output[:, :, :(samples_in_half_day * 2)],
+                                                            targets[:, :, :(samples_in_half_day * 2)],
+                                                            T, criterion)
     return total_loss / (len(eval_data))
 
 
