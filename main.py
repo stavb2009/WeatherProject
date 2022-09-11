@@ -291,6 +291,7 @@ if __name__ == '__main__':
                                 if optimizerN ==0 : optimizer = torch.optim.RMSprop(model.parameters(), lr=lr)
                                 elif optimizerN==1: optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
                                 else: optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                                ###### delete later
 
 
                                 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
