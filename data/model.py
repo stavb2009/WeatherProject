@@ -107,9 +107,9 @@ def generate_square_subsequent_mask(sz: int) -> Tensor:
     return torch.triu(torch.ones(sz, sz) * float('-inf'), diagonal=1)
 
 
-def special_loss(estimation, target, T, torch_loss_func, punishment_factor=10):
+def special_loss(estimation, target, T, torch_loss_func,device,punishment_factor=10):
     assert estimation.shape == target.shape, "special_loos: estimation and targets not in the same shape"
-    threshold = punishment_factor * T * torch.ones(target.shape)
+    threshold = punishment_factor * T * torch.ones(target.shape).to(device)
     new_estimation = torch.where(estimation >= T, estimation, threshold)
     new_target = torch.where(target >= T, target, threshold)
 
