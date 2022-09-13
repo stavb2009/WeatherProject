@@ -77,8 +77,8 @@ train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train, numOfParam
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameters=3)
 
 ## test data
-file_train = 'data_tanh5_sept.csv'
-file_val = 'forcast_tanh5_sept.csv'
+file_train = 'data_tanh5_sept_rev2.csv'
+file_val = 'val_tanh5_sept_rev2.csv'
 src_test = os.path.join(folder, file_train)
 src_val_test = os.path.join(folder, file_val)
 df_test = pd.read_csv(src_test)
@@ -128,8 +128,8 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
         #
 
         # we want to use only the wind and direction and not the day:
-        loss = model_l.special_loss(output[:, :, :(samples_in_half_day * 2)], targets[:, :, :(samples_in_half_day * 2)],
-                                    T, criterion)
+        loss = model_l.special_loss(output[:, :, :(samples_in_half_day * 2)].to(device), targets[:, :, :(samples_in_half_day * 2)].to(device),
+                                    T, criterion, device = device)
         # loss = criterion(output[:, :, :(samples_in_half_day*2)], targets[:, :, :(samples_in_half_day*2)])
 
         if save:
@@ -209,24 +209,24 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
 
             total_loss += batch_size * model_l.special_loss(output[:, :, :(samples_in_half_day * 2)],
                                                             targets[:, :, :(samples_in_half_day * 2)],
-                                                            T, criterion)
+                                                            T, criterion, device = device)
     return total_loss / (len(eval_data))
 
 
 if __name__ == '__main__':
-    epochs_list = range(20, 61, 10)
-    nheads = [8,
-              16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    epochs_list = range(40, 60, 20)
+    nheads = [16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(1e-3, 1e-2, num=2)  # learning rates
+    lrs = np.geomspace(0.9e-3, 2*1e-2, num=2)  # learning rates
     epoch_sizes = range(40, 41, 10)
     num_of_batches = range(3, 4)
-    d_hids = range(200, 350, 80)  # dimension of the feedforward network model in nn.TransformerEncoder
+    d_hids = range(320, 401, 100)  # dimension of the feedforward network model in nn.TransformerEncoder
     nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
+    dropout = 0.2  # dropout probability
     dropout = 0.2  # dropout probability
     best_val_loss = float('inf')
     best_model = None
-
+    optimizers=[0,1,2]   ###### justfor sept.11
     ## Model parameters
     T = 0.2
     dim_val = 512  # This can be any value divisible by n_heads. 512 is used in the original transformer paper.
@@ -261,88 +261,93 @@ if __name__ == '__main__':
                 for num_batch in num_of_batches:
                     for nhead in nheads:
                         for d_hid in d_hids:
-                            # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
-                            # = " + str( epoch_size) + ' num_batch = ' + str(num_batch) + ' nhead= ' + str(nhead) + '
-                            # d_hids= ' \ + str(d_hid)
-                            #
-                            #
-                            #
-                            #
-                            writer_comment = f' tuning  epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
-                                             f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
-                            print(writer_comment)
-                            writer = SummaryWriter(comment=writer_comment)
-                            ###
-                            ###
-                            train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
-                                                                   samps_in_batch=num_batch, shuffle=True)  # changed
-                            test_tuple = dataLoader.Data.batchify(test_tensor_row, val_test_row,
-                                                                  samps_in_batch=1, shuffle=False)
-                            # Let's play with it a bit
-                            ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
-                            # size of data that we put inside # the number of
-                            # columns in the input
-                            d_model = train_tuple[0][0].shape[2]  # embedding dimension
-                            # but in our case it can be an arbitrary
-                            model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
-                                device)
-                            criterion = nn.L1Loss()
-                            optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+                            for optimizerN in optimizers:
+                                # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
+                                # = " + str( epoch_size) + ' num_batch = ' + str(num_batch) + ' nhead= ' + str(nhead) + '
+                                # d_hids= ' \ + str(d_hid)
+                                #
+                                #
+                                #
+                                #
+                                writer_comment = f' different optimizers {optimizerN} || epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
+                                                 f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
+                                print(writer_comment)
+                                writer = SummaryWriter(comment=writer_comment)
+                                ###
+                                ###
+                                train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
+                                                                       samps_in_batch=num_batch, shuffle=True)  # changed
+                                test_tuple = dataLoader.Data.batchify(test_tensor_row, val_test_row,
+                                                                      samps_in_batch=1, shuffle=False)
+                                # Let's play with it a bit
+                                ntokens = train_tuple[0][0].shape[2]  # len(selected_columns)
+                                # size of data that we put inside # the number of
+                                # columns in the input
+                                d_model = train_tuple[0][0].shape[2]  # embedding dimension
+                                # but in our case it can be an arbitrary
+                                model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
+                                    device)
+                                criterion = nn.L1Loss()
+                                if optimizerN ==0 : optimizer = torch.optim.RMSprop(model.parameters(), lr=lr)
+                                elif optimizerN==1: optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+                                else: optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                                ###### delete later
 
-                            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
-                            train_data = train_tensor_row
 
-                            for epoch in range(1, epochs + 1):
-                                epoch_start_time = time.time()
-                                random_indexes = torch.arange(
-                                    len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
-                                train(model, random_indexes)
-                                # writer.add_graph(model)
-                                val_loss = evaluate(model, test_tuple)
-                                writer.add_scalar('val_loss', val_loss, epoch)
-                                writer.add_histogram("weights decoder data", model.decoder.weight.data)
-                                writer.add_histogram("weights decoder T", model.decoder.weight.T)
-                                writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
-                                writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
-                                writer.add_histogram("bias  decoder", model.decoder.bias.data)
+                                scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+                                train_data = train_tensor_row
 
-                                writer.add_histogram("weights encoder data", model.encoder.weight.data)
-                                writer.add_histogram("weights encoder T", model.encoder.weight.T)
-                                writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
-                                writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
-                                writer.add_histogram("bias encoder", model.encoder.bias.data)
-                                writer.add_histogram("layer 1 linear 1 weight",
-                                                     model.transformer_encoder.layers[0].linear1.weight)
-                                writer.add_scalar("layer 1 linear 1 weight grad",
-                                                  torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
-                                writer.add_histogram("layer 1 linear 2 weight",
-                                                     model.transformer_encoder.layers[0].linear2.weight)
-                                writer.add_scalar("layer 1 linear 2 weight grad",
-                                                  torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
-                                writer.add_histogram("layer 2 linear 1 weight",
-                                                     model.transformer_encoder.layers[1].linear1.weight)
-                                writer.add_scalar("layer 2 linear 1 weight grad",
-                                                  torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
-                                writer.add_histogram("layer 2 linear 2 weight",
-                                                     model.transformer_encoder.layers[1].linear2.weight)
-                                writer.add_scalar("layer 2 linear 2 weight grad",
-                                                  torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
+                                for epoch in range(1, epochs + 1):
+                                    epoch_start_time = time.time()
+                                    random_indexes = torch.arange(
+                                        len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
+                                    train(model, random_indexes)
+                                    # writer.add_graph(model)
+                                    val_loss = evaluate(model, test_tuple)
+                                    writer.add_scalar('val_loss', val_loss, epoch)
+                                    writer.add_histogram("weights decoder data", model.decoder.weight.data)
+                                    writer.add_histogram("weights decoder T", model.decoder.weight.T)
+                                    writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
+                                    writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
+                                    writer.add_histogram("bias  decoder", model.decoder.bias.data)
 
-                                # val_ppl = 1  # math.exp(val_loss)
-                                elapsed = time.time() - epoch_start_time
-                                # writer.flush()  # should it be here?
-                                print('-' * 89)
-                                print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-                                      f'valid loss {val_loss:5.2f}')
-                                print('-' * 89)
+                                    writer.add_histogram("weights encoder data", model.encoder.weight.data)
+                                    writer.add_histogram("weights encoder T", model.encoder.weight.T)
+                                    writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
+                                    writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
+                                    writer.add_histogram("bias encoder", model.encoder.bias.data)
+                                    writer.add_histogram("layer 1 linear 1 weight",
+                                                         model.transformer_encoder.layers[0].linear1.weight)
+                                    writer.add_scalar("layer 1 linear 1 weight grad",
+                                                      torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
+                                    writer.add_histogram("layer 1 linear 2 weight",
+                                                         model.transformer_encoder.layers[0].linear2.weight)
+                                    writer.add_scalar("layer 1 linear 2 weight grad",
+                                                      torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
+                                    writer.add_histogram("layer 2 linear 1 weight",
+                                                         model.transformer_encoder.layers[1].linear1.weight)
+                                    writer.add_scalar("layer 2 linear 1 weight grad",
+                                                      torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
+                                    writer.add_histogram("layer 2 linear 2 weight",
+                                                         model.transformer_encoder.layers[1].linear2.weight)
+                                    writer.add_scalar("layer 2 linear 2 weight grad",
+                                                      torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
 
-                                if val_loss < best_val_loss:
-                                    best_val_loss = val_loss
-                                    best_model = copy.deepcopy(model)
-                                    torch.save(best_model.state_dict(),
-                                               os.path.join(os.getcwd(), 'data/model_trained.pt'))
-                                scheduler.step()
+                                    # val_ppl = 1  # math.exp(val_loss)
+                                    elapsed = time.time() - epoch_start_time
+                                    # writer.flush()  # should it be here?
+                                    print('-' * 89)
+                                    print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+                                          f'valid loss {val_loss:5.2f}')
+                                    print('-' * 89)
 
-                            pass
-                            writer.flush()
-                            writer.close()
+                                    if val_loss < best_val_loss:
+                                        best_val_loss = val_loss
+                                        best_model = copy.deepcopy(model)
+                                        torch.save(best_model.state_dict(),
+                                                   os.path.join(os.getcwd(), 'data/model_trained.pt'))
+                                    scheduler.step()
+
+                                pass
+                                writer.flush()
+                                writer.close()
