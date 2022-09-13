@@ -111,7 +111,7 @@ def special_loss(estimation, target, T, torch_loss_func, punishment_factor=10):
     assert estimation.shape == target.shape, "special_loos: estimation and targets not in the same shape"
     threshold = punishment_factor * T * torch.ones(target.shape)
     new_estimation = torch.where(estimation >= T, estimation, threshold)
-    new_target = torch.where(target >= T, target, threshold)
+    new_target = torch.where(target >= T, target, threshold - target)
 
     loss = torch_loss_func(new_estimation, new_target)
     return loss
