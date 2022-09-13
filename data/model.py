@@ -111,6 +111,8 @@ def special_loss(estimation, target, T, torch_loss_func,device,punishment_factor
     assert estimation.shape == target.shape, "special_loos: estimation and targets not in the same shape"
     threshold = punishment_factor * T * torch.ones(target.shape).to(device)
     new_estimation = torch.where(estimation >= T, estimation, threshold)
+
+    # A try to make it more smooth:
     new_target = torch.where(target >= T, target, threshold - target)
 
     loss = torch_loss_func(new_estimation, new_target)
