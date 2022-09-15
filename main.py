@@ -6,9 +6,9 @@ import dataLoader
 from data import model as model_l
 from data import model_2 as tst
 import pandas as pd
+
 import xlsxwriter
 import torch.optim as opt
-
 import copy
 import time
 
@@ -143,7 +143,7 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
                 df2save = df2save.append(tmp_df, ignore_index=False)
 
             if batch == (num_batches - 1):  # last round of train
-                df2save.to_csv(os.path.join(folder, 'output_results.csv'))
+                df2save.to_csv(os.path.join(folder, 'train_output_results.csv'))
 
 
 
@@ -195,7 +195,9 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
     #         start_time = time.time()
 
 
-def evaluate(model: nn.Module, eval_data: Tensor) -> float:
+def evaluate(model: nn.Module, eval_data: Tensor, save=False) -> float:
+    if save:
+        df2save = pd.DataFrame()
     model.eval()  # turn on evaluation mode
     total_loss = 0.
     src_mask = model_l.generate_square_subsequent_mask(eval_data[1][0].shape[0]).to(device)
@@ -210,6 +212,21 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
             total_loss += batch_size * model_l.special_loss(output[:, :, :(samples_in_half_day * 2)],
                                                             targets[:, :, :(samples_in_half_day * 2)],
                                                             T, criterion, device = device)
+            if save:
+                category_length = output.shape[2] // 4  # 4 is the current number of categories
+                for idx in range(output.shape[0]):  # to loop over all the samples in the batch
+                    tmp_dict = {
+                        'wx': output[idx, 0, (category_length * 0):(category_length * 1)].detach().cpu().numpy(),
+                        'wy': output[idx, 0, (category_length * 1):(category_length * 2)].detach().cpu().numpy(),
+                        'T_DL_Avg': output[idx, 0, (category_length * 2):(category_length * 3)].detach().cpu().numpy(),
+                        'TIMESTAMP': output[idx, 0, (category_length * 3):(category_length * 4)].detach().cpu().numpy()}
+                    tmp_df = pd.DataFrame.from_dict(tmp_dict, orient='index')
+                    df2save = df2save.append(tmp_df, ignore_index=False)
+
+    if save:  # last round of train
+        df2save.to_csv(os.path.join(folder, 'test_output_results.csv'))
+
+
     return total_loss / (len(eval_data))
 
 
@@ -321,7 +338,7 @@ if __name__ == '__main__':
                                         len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                     train(model, random_indexes, save=True)
                                     # writer.add_graph(model)
-                                    val_loss = evaluate(model, test_tuple)
+                                    val_loss = evaluate(model, test_tuple, save=True)
                                     writer.add_scalar('val_loss', val_loss, epoch)
                                     writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
                                     writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
