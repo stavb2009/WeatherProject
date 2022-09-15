@@ -67,8 +67,8 @@ import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 folder = 'data_for_24_4'
-file_train = 'data_tanh5.csv'
-file_val = 'val_tanh5.csv'
+file_train = 'data_new_pos.csv'
+file_val = 'forecast_new_pos.csv'
 src_train = os.path.join(folder, file_train)
 src_val = os.path.join(folder, file_val)
 df_train = pd.read_csv(src_train)
@@ -77,8 +77,8 @@ train_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_train, numOfParam
 val_tensor_row = dataLoader.Data.convert_panda_to_tensors(df_val, numOfParameters=3)
 
 ## test data
-file_train = 'data_tanh5_sept_rev2.csv'
-file_val = 'val_tanh5_sept_rev2.csv'
+file_train = 'test_data_new_pos.csv'
+file_val = 'test_forecast_new_pos.csv'
 src_test = os.path.join(folder, file_train)
 src_val_test = os.path.join(folder, file_val)
 df_test = pd.read_csv(src_test)
@@ -135,17 +135,17 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
         if save:
             category_length = output.shape[2] // 4  # 4 is the current number of categories
             for idx in range(output.shape[0]):  # to loop over all the samples in the batch
-                tmp_dict = {'wx': output[idx, 0, (category_length * 0):(category_length * 1)].detach().numpy(),
-                            'wy': output[idx, 0, (category_length * 1):(category_length * 2)].detach().numpy(),
-                            'T_DL_Avg': output[idx, 0, (category_length * 2):(category_length * 3)].detach().numpy(),
-                            'TIMESTAMP': output[idx, 0, (category_length * 3):(category_length * 4)].detach().numpy()}
+                tmp_dict = {'wx': output[idx, 0, (category_length * 0):(category_length * 1)].detach().cpu().numpy(),
+                            'wy': output[idx, 0, (category_length * 1):(category_length * 2)].detach().cpu().numpy(),
+                            'T_DL_Avg': output[idx, 0, (category_length * 2):(category_length * 3)].detach().cpu().numpy(),
+                            'TIMESTAMP': output[idx, 0, (category_length * 3):(category_length * 4)].detach().cpu().numpy()}
                 tmp_df = pd.DataFrame.from_dict(tmp_dict, orient='index')
                 df2save = df2save.append(tmp_df, ignore_index=False)
 
             if batch == (num_batches - 1):  # last round of train
                 df2save.to_csv(os.path.join(folder, 'output_results.csv'))
 
-            print("hey")
+
 
         # writer.add_scalar('training loss', loss, batch)  # used to be global_step=1
 
@@ -215,7 +215,7 @@ def evaluate(model: nn.Module, eval_data: Tensor) -> float:
 
 if __name__ == '__main__':
     epochs_list = range(40, 60, 20)
-    nheads = [16]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    nheads = [16,32,76,152]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
     lrs = np.geomspace(0.9e-3, 2*1e-2, num=2)  # learning rates
     epoch_sizes = range(40, 41, 10)
@@ -299,41 +299,47 @@ if __name__ == '__main__':
 
                                 for epoch in range(1, epochs + 1):
                                     epoch_start_time = time.time()
-                                    random_indexes = torch.arange(
-                                        len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
-                                    train(model, random_indexes)
-                                    # writer.add_graph(model)
-                                    val_loss = evaluate(model, test_tuple)
-                                    writer.add_scalar('val_loss', val_loss, epoch)
+
+                                    writer.add_scalar("optimizer's lr",optimizer.param_groups[0]['lr'])
                                     writer.add_histogram("weights decoder data", model.decoder.weight.data)
                                     writer.add_histogram("weights decoder T", model.decoder.weight.T)
-                                    writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
-                                    writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
                                     writer.add_histogram("bias  decoder", model.decoder.bias.data)
-
                                     writer.add_histogram("weights encoder data", model.encoder.weight.data)
                                     writer.add_histogram("weights encoder T", model.encoder.weight.T)
-                                    writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
-                                    writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
                                     writer.add_histogram("bias encoder", model.encoder.bias.data)
                                     writer.add_histogram("layer 1 linear 1 weight",
                                                          model.transformer_encoder.layers[0].linear1.weight)
-                                    writer.add_scalar("layer 1 linear 1 weight grad",
-                                                      torch.norm(model.transformer_encoder.layers[0].linear1.weight.grad))
                                     writer.add_histogram("layer 1 linear 2 weight",
                                                          model.transformer_encoder.layers[0].linear2.weight)
-                                    writer.add_scalar("layer 1 linear 2 weight grad",
-                                                      torch.norm(model.transformer_encoder.layers[0].linear2.weight.grad))
                                     writer.add_histogram("layer 2 linear 1 weight",
                                                          model.transformer_encoder.layers[1].linear1.weight)
-                                    writer.add_scalar("layer 2 linear 1 weight grad",
-                                                      torch.norm(model.transformer_encoder.layers[1].linear1.weight.grad))
                                     writer.add_histogram("layer 2 linear 2 weight",
                                                          model.transformer_encoder.layers[1].linear2.weight)
-                                    writer.add_scalar("layer 2 linear 2 weight grad",
-                                                      torch.norm(model.transformer_encoder.layers[1].linear2.weight.grad))
 
-                                    # val_ppl = 1  # math.exp(val_loss)
+
+                                    random_indexes = torch.arange(
+                                        len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
+                                    train(model, random_indexes, save=True)
+                                    # writer.add_graph(model)
+                                    val_loss = evaluate(model, test_tuple)
+                                    writer.add_scalar('val_loss', val_loss, epoch)
+                                    writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
+                                    writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
+                                    writer.add_histogram("weights encoder grad", model.encoder.weight.grad)
+                                    writer.add_scalar("weight encoder grad", torch.norm(model.encoder.weight.grad))
+                                    writer.add_scalar("layer 1 linear 1 weight grad",
+                                                      torch.norm(
+                                                          model.transformer_encoder.layers[0].linear1.weight.grad))
+                                    writer.add_scalar("layer 1 linear 2 weight grad",
+                                                      torch.norm(
+                                                          model.transformer_encoder.layers[0].linear2.weight.grad))
+                                    writer.add_scalar("layer 2 linear 1 weight grad",
+                                                      torch.norm(
+                                                          model.transformer_encoder.layers[1].linear1.weight.grad))
+                                    writer.add_scalar("layer 2 linear 2 weight grad",
+                                                      torch.norm(
+                                                          model.transformer_encoder.layers[1].linear2.weight.grad))
+
                                     elapsed = time.time() - epoch_start_time
                                     # writer.flush()  # should it be here?
                                     print('-' * 89)
