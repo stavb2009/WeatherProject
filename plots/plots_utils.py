@@ -34,45 +34,39 @@ def plot_rose_diagram(output: tuple, forecast: tuple):
     data = {'names': ['output', 'forecast'], 'radius': [output_r, forecast_r], 'theta': [output_theta, forecast_theta]}
     df = pd.DataFrame(data=data)
 
-    fig = ppx.bar_polar(df, r="radius", theta="theta",hover_name='names' ,template="plotly_dark")
+    fig = ppx.scatter_polar(df, r="radius", theta="theta",hover_name='names', color="names",template="plotly_dark")
     fig.show()
 
 
-
+def plot_those_indexes(results, forecast, raw, colums):
+    results_X = results.iloc[raw][colums]
+    results_Y = results.iloc[raw+1][colums]
+    forecast_X = forecast.iloc[raw+1][colums]
+    forecast_Y = forecast.iloc[raw+2][colums]
+    plot_rose_diagram((results_X, results_Y), (forecast_X, forecast_Y))
 
 
 
 
 if __name__ == '__main__':
-    output_dir = 'output_results.csv'
+    output_dir = 'test_output_results.csv'
     results = import_csv_to_pandas(output_dir)
-    results_X = results.iloc[4][20]
-    results_Y = results.iloc[5][20]
+    results_X = results.iloc[3][20]
+    results_Y = results.iloc[4][20]
 
-    forecast_dir = 'forecast_new_pos.csv'
+    forecast_dir = 'test_forecast_new_pos.csv'
     forecast = import_csv_to_pandas(forecast_dir)
     forecast_X = forecast.iloc[4][20]
     forecast_Y = forecast.iloc[5][20]
 
     plot_rose_diagram((results_X, results_Y), (forecast_X, forecast_Y))
 
+    plot_those_indexes(results, forecast, 3, 35)
+    plot_those_indexes(results, forecast, 3, 40)
 
-    results_X = results.iloc[4][55]
-    results_Y = results.iloc[5][55]
-    forecast_X = forecast.iloc[4][55]
-    forecast_Y = forecast.iloc[5][55]
-    plot_rose_diagram((results_X, results_Y), (forecast_X, forecast_Y))
+    plot_those_indexes(results, forecast, 35, 12)
+    plot_those_indexes(results, forecast, 35, 17)
 
-    results_X = results.iloc[0][55]
-    results_Y = results.iloc[1][55]
-    forecast_X = forecast.iloc[0][55]
-    forecast_Y = forecast.iloc[1][55]
-    plot_rose_diagram((results_X, results_Y), (forecast_X, forecast_Y))
-
-    results_X = results.iloc[880][15]
-    results_Y = results.iloc[881][15]
-    forecast_X = forecast.iloc[880][15]
-    forecast_Y = forecast.iloc[881][15]
-    plot_rose_diagram((results_X, results_Y), (forecast_X, forecast_Y))
-
+    plot_those_indexes(results, forecast, 39, 50)
+    plot_those_indexes(results, forecast, 39, 50)
     print('check')

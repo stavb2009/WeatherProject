@@ -110,10 +110,10 @@ def generate_square_subsequent_mask(sz: int) -> Tensor:
 def special_loss(estimation, target, T, torch_loss_func,device,punishment_factor=10):
     assert estimation.shape == target.shape, "special_loos: estimation and targets not in the same shape"
     threshold = punishment_factor * T * torch.ones(target.shape).to(device)
-    new_estimation = torch.where(estimation >= T, estimation, threshold)
+    new_estimation = torch.where(torch.abs(estimation) >= T, estimation, threshold)
 
     # A try to make it more smooth:
-    new_target = torch.where(target >= T, target, threshold - target)
+    new_target = torch.where(torch.abs(target) >= T, target, threshold - torch.abs(target)*punishment_factor)
 
     loss = torch_loss_func(new_estimation, new_target)
     return loss
