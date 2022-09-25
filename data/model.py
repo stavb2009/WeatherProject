@@ -63,6 +63,10 @@ class TransformerModel(nn.Module):
 
         self.d_model = d_model
         self.decoder = nn.Linear(d_model, ntoken)
+        self.decoder2 = nn.Linear(ntoken, ntoken//2)
+        self.decoder3 = nn.Linear(ntoken//2, ntoken//4)
+        self.decoder4 = nn.Linear(ntoken//4, ntoken//2)
+        self.decoder5 = nn.Linear(ntoken//2, ntoken)
 
         self.init_weights()
 
@@ -79,6 +83,10 @@ class TransformerModel(nn.Module):
         # self.encoder.weight.data.uniform_(sqrt_dim, sqrt_dim)  #try5
 
         torch.nn.init.xavier_uniform(self.decoder.weight.data)  # try3
+        torch.nn.init.xavier_uniform(self.decoder2.weight.data)  # try3
+        torch.nn.init.xavier_uniform(self.decoder3.weight.data)  # try3
+        torch.nn.init.xavier_uniform(self.decoder4.weight.data)  # try3
+        torch.nn.init.xavier_uniform(self.decoder5.weight.data)  # try3
         torch.nn.init.xavier_uniform(self.encoder.weight.data)  # try3
         self.decoder.bias.data.zero_()
 
@@ -96,6 +104,10 @@ class TransformerModel(nn.Module):
 
         output = self.transformer_encoder(src, src_mask)
         output = self.decoder(output)
+        output = self.decoder2(output)
+        output = self.decoder3(output)
+        output = self.decoder4(output)
+        output = self.decoder5(output)
         # output = self.decoder(src) #simple layer
 
         # output = self.transformer_decoder(output,src_mask)

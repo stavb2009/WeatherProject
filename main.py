@@ -195,7 +195,7 @@ def train(model: nn.Module, random_numbers, save=False) -> None:
     #         start_time = time.time()
 
 
-def evaluate(model: nn.Module, eval_data: Tensor, save=False) -> float:
+def evaluate(model: nn.Module, eval_data: Tensor, save=False, comment='') -> float:
     if save:
         df2save = pd.DataFrame()
     model.eval()  # turn on evaluation mode
@@ -224,7 +224,8 @@ def evaluate(model: nn.Module, eval_data: Tensor, save=False) -> float:
                     df2save = df2save.append(tmp_df, ignore_index=False)
 
     if save:  # last round of train
-        df2save.to_csv(os.path.join(folder, 'test_output_results.csv'))
+
+        df2save.to_csv(os.path.join(folder, 'test_output_results'+comment+'.csv'))
 
 
     return total_loss / (len(eval_data))
@@ -232,20 +233,22 @@ def evaluate(model: nn.Module, eval_data: Tensor, save=False) -> float:
 
 if __name__ == '__main__':
     epochs_list = range(40, 60, 20)
-    nheads = [16,32,76,152]  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
+    #nheads = [16,32,76,152]   possible values
+    nhead = 32  # int(len(selected_columns)/w)  # number of heads in nn.MultiheadAttention # I supose that it shold be the number of variables that we have
     # TODO: we need to see how many heads we need
-    lrs = np.geomspace(0.9e-3, 2*1e-2, num=2)  # learning rates
-    epoch_sizes = range(40, 41, 10)
-    num_of_batches = range(3, 4)
-    d_hids = range(320, 401, 100)  # dimension of the feedforward network model in nn.TransformerEncoder
-    nlayers = 4  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
-    dropout = 0.2  # dropout probability
+    lrs = np.geomspace(1e-3, 1e-3, num=1)  # learning rates  #### change
+    epoch_sizes = range(20, 80, 30)
+    T_list = [0.15,0.3,0.4]
+    num_of_batches = range(3,4)
+    d_hids = [320]  # dimension of the feedforward network model in nn.TransformerEncoder
+    nlayers_list = [4,32]  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
+    #dropout = 0.2  # dropout probability
     dropout = 0.2  # dropout probability
     best_val_loss = float('inf')
     best_model = None
-    optimizers=[0,1,2]   ###### justfor sept.11
+    optimizers=['RMSprop','AdamW']   ###### 0 = RMSprop [0,1,2]
     ## Model parameters
-    T = 0.2
+    #T = 0.2
     dim_val = 512  # This can be any value divisible by n_heads. 512 is used in the original transformer paper.
     n_heads = 8  # The number of attention heads (aka parallel attention layers). dim_val must be divisible by this number
     n_decoder_layers = 4  # Number of times the decoder layer is stacked in the decoder
@@ -274,9 +277,9 @@ if __name__ == '__main__':
 
     for epochs in epochs_list:
         for lr in lrs:
-            for epoch_size in epoch_sizes:
+            for T in T_list:
                 for num_batch in num_of_batches:
-                    for nhead in nheads:
+                    for nlayers in nlayers_list:
                         for d_hid in d_hids:
                             for optimizerN in optimizers:
                                 # writer_comment = "epochs = " + str(epochs) + f' lr ={lr:.} ' + str( lr) + " epoch_size
@@ -286,11 +289,10 @@ if __name__ == '__main__':
                                 #
                                 #
                                 #
-                                writer_comment = f' different optimizers {optimizerN} || epochs = {epochs} ||  lr ={lr:1.6f} ||  epoch_size = {epoch_size} || ' \
-                                                 f' num_batch = {num_batch} || nhead = {nhead} || d_hids = {d_hid}'
+                                writer_comment = f'optimizers {optimizerN} || epochs = {epochs} ||  lr ={lr:1.6f} ||  T = {T} || Nlayers={nlayers}'
                                 print(writer_comment)
                                 writer = SummaryWriter(comment=writer_comment)
-                                ###
+                                ###epochs
                                 ###
                                 train_tuple = dataLoader.Data.batchify(train_tensor_row, val_tensor_row,
                                                                        samps_in_batch=num_batch, shuffle=True)  # changed
@@ -305,8 +307,8 @@ if __name__ == '__main__':
                                 model = model_l.TransformerModel(ntokens, d_model, nhead, d_hid, nlayers, dropout).to(
                                     device)
                                 criterion = nn.L1Loss()
-                                if optimizerN ==0 : optimizer = torch.optim.RMSprop(model.parameters(), lr=lr)
-                                elif optimizerN==1: optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+                                if optimizerN =='RMSprop' : optimizer = torch.optim.RMSprop(model.parameters(), lr=lr)
+                                elif optimizerN=='AdamW': optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
                                 else: optimizer = torch.optim.Adam(model.parameters(), lr=lr)
                                 ###### delete later
 
@@ -338,7 +340,7 @@ if __name__ == '__main__':
                                         len(train_tuple))  # torch.squeeze(torch.randint(0, len(train_tuple) - 1, (1, epoch_size)))
                                     train(model, random_indexes, save=True)
                                     # writer.add_graph(model)
-                                    val_loss = evaluate(model, test_tuple, save=True)
+                                    val_loss = evaluate(model, test_tuple, save=True, comment=writer_comment)
                                     writer.add_scalar('val_loss', val_loss, epoch)
                                     writer.add_histogram("weights decoder grad", model.decoder.weight.grad)
                                     writer.add_scalar("weight decoder grad", torch.norm(model.decoder.weight.grad))
